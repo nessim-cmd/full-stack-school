@@ -48,11 +48,11 @@ const StudentListPage = async ({
     },
     ...(role === "admin"
       ? [
-          {
-            header: "Actions",
-            accessor: "action",
-          },
-        ]
+        {
+          header: "Actions",
+          accessor: "action",
+        },
+      ]
       : []),
   ];
 
@@ -135,6 +135,7 @@ const StudentListPage = async ({
       },
       take: ITEM_PER_PAGE,
       skip: ITEM_PER_PAGE * (p - 1),
+      orderBy: { createdAt: "desc" },
     }),
     prisma.student.count({ where: query }),
   ]);
