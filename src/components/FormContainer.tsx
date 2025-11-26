@@ -1,21 +1,23 @@
 import prisma from "@/lib/prisma";
 import FormModal from "./FormModal";
-import { auth } from "@clerk/nextjs/server";
+import { getSessionUser } from "@/lib/authUser";
 
 export type FormContainerProps = {
   table:
-    | "teacher"
-    | "student"
-    | "parent"
-    | "subject"
-    | "class"
-    | "lesson"
-    | "exam"
-    | "assignment"
-    | "result"
-    | "attendance"
-    | "event"
-    | "announcement";
+  | "teacher"
+  | "student"
+  | "parent"
+  | "subject"
+  | "class"
+  | "lesson"
+  | "exam"
+  | "assignment"
+  | "result"
+  | "attendance"
+  | "event"
+  | "announcement"
+  | "resource"
+  | "message";
   type: "create" | "update" | "delete";
   data?: any;
   id?: number | string;
@@ -24,9 +26,9 @@ export type FormContainerProps = {
 const FormContainer = async ({ table, type, data, id }: FormContainerProps) => {
   let relatedData = {};
 
-  const { userId, sessionClaims } = auth();
-  const role = (sessionClaims?.metadata as { role?: string })?.role;
-  const currentUserId = userId;
+  const session = await getSessionUser();
+  const role = session?.role;
+  const currentUserId = session?.id;
 
   if (type !== "delete") {
     switch (table) {
@@ -68,6 +70,93 @@ const FormContainer = async ({ table, type, data, id }: FormContainerProps) => {
           select: { id: true, name: true },
         });
         relatedData = { lessons: examLessons };
+        break;
+      case "lesson":
+        const lessonSubjects = await prisma.subject.findMany({
+          select: { id: true, name: true },
+        });
+        const lessonClasses = await prisma.class.findMany({
+          select: { id: true, name: true },
+        });
+        const lessonTeachers = await prisma.teacher.findMany({
+          select: { id: true, name: true, surname: true },
+        });
+        relatedData = {
+          subjects: lessonSubjects,
+          classes: lessonClasses,
+          teachers: lessonTeachers,
+        };
+        break;
+      case "event":
+        const eventClasses = await prisma.class.findMany({
+          select: { id: true, name: true },
+        });
+        relatedData = { classes: eventClasses };
+        break;
+      case "resource":
+        const resourceLessons = await prisma.lesson.findMany({
+          where: {
+            ...(role === "teacher" ? { teacherId: currentUserId! } : {}),
+          },
+          select: { id: true, name: true },
+        });
+        const resourceAssignments = await prisma.assignment.findMany({
+          where: {
+            ...(role === "teacher" ? { lesson: { teacherId: currentUserId! } } : {}),
+          },
+          select: { id: true, title: true },
+        });
+        relatedData = { lessons: resourceLessons, assignments: resourceAssignments };
+        break;
+      case "result":
+        const resultStudents = await prisma.student.findMany({
+          select: { id: true, name: true, surname: true },
+        });
+        const resultExams = await prisma.exam.findMany({
+          where: {
+            ...(role === "teacher" ? { lesson: { teacherId: currentUserId! } } : {}),
+          },
+          select: { id: true, title: true },
+        });
+        const resultAssignments = await prisma.assignment.findMany({
+          where: {
+            ...(role === "teacher" ? { lesson: { teacherId: currentUserId! } } : {}),
+          },
+          select: { id: true, title: true },
+        });
+        relatedData = { students: resultStudents, exams: resultExams, assignments: resultAssignments };
+        break;
+      case "message":
+        const msgStudents = await prisma.student.findMany({
+          select: { id: true, name: true, surname: true, username: true },
+        });
+        const msgTeachers = await prisma.teacher.findMany({
+          select: { id: true, name: true, surname: true, username: true },
+        });
+        const msgParents = await prisma.parent.findMany({
+          select: { id: true, name: true, surname: true, username: true },
+        });
+        const msgAdmins = await prisma.admin.findMany({
+          select: { id: true, username: true },
+        });
+        // Map admin to have name/surname structure if needed, or handle in UI
+        const formattedAdmins = msgAdmins.map(a => ({ ...a, name: "Admin", surname: a.username }));
+
+        relatedData = {
+          students: msgStudents,
+          teachers: msgTeachers,
+          parents: msgParents,
+          admins: formattedAdmins
+        };
+        break;
+      case "assignment":
+        const assignmentLessons = await prisma.lesson.findMany({
+          where: {
+            ...(role === "teacher" ? { teacherId: currentUserId! } : {}),
+          },
+          select: { id: true, name: true },
+        });
+        relatedData = { lessons: assignmentLessons };
         break;
 
       default:

@@ -63,6 +63,7 @@ const ParentForm = ({
     {
       success: false,
       error: false,
+      message: "",
     }
   );
 
@@ -156,7 +157,9 @@ const ParentForm = ({
         )}
       </div>
       {state.error && (
-        <span className="text-red-500">Something went wrong!</span>
+        <span className="text-red-500">
+          {state.message || "Something went wrong!"}
+        </span>
       )}
       <button type="submit" className="bg-blue-400 text-white p-2 rounded-md">
         {type === "create" ? "Create" : "Update"}

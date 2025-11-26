@@ -5,8 +5,8 @@ import TableSearch from "@/components/TableSearch";
 import prisma from "@/lib/prisma";
 import { ITEM_PER_PAGE } from "@/lib/settings";
 import { Announcement, Class, Prisma } from "@prisma/client";
+import { getSessionUser } from "@/lib/authUser";
 import Image from "next/image";
-import { auth } from "@clerk/nextjs/server";
 
 
 type AnnouncementList = Announcement & { class: Class };
@@ -15,11 +15,11 @@ const AnnouncementListPage = async ({
 }: {
   searchParams: { [key: string]: string | undefined };
 }) => {
-  
-  const { userId, sessionClaims } = auth();
-  const role = (sessionClaims?.metadata as { role?: string })?.role;
-  const currentUserId = userId;
-  
+
+  const session = await getSessionUser();
+  const role = session?.role;
+  const currentUserId = session?.id;
+
   const columns = [
     {
       header: "Title",
@@ -36,14 +36,14 @@ const AnnouncementListPage = async ({
     },
     ...(role === "admin"
       ? [
-          {
-            header: "Actions",
-            accessor: "action",
-          },
-        ]
+        {
+          header: "Actions",
+          accessor: "action",
+        },
+      ]
       : []),
   ];
-  
+
   const renderRow = (item: AnnouncementList) => (
     <tr
       key={item.id}

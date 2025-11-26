@@ -1,3 +1,4 @@
+import FormContainer from "@/components/FormContainer";
 import FormModal from "@/components/FormModal";
 import Pagination from "@/components/Pagination";
 import Table from "@/components/Table";
@@ -5,8 +6,8 @@ import TableSearch from "@/components/TableSearch";
 import prisma from "@/lib/prisma";
 import { ITEM_PER_PAGE } from "@/lib/settings";
 import { Assignment, Class, Prisma, Subject, Teacher } from "@prisma/client";
+import { getSessionUser } from "@/lib/authUser";
 import Image from "next/image";
-import { auth } from "@clerk/nextjs/server";
 
 type AssignmentList = Assignment & {
   lesson: {
@@ -14,19 +15,18 @@ type AssignmentList = Assignment & {
     class: Class;
     teacher: Teacher;
   };
-};
+} & { resources: { id: number; title: string; url: string }[] };
 
 const AssignmentListPage = async ({
   searchParams,
 }: {
   searchParams: { [key: string]: string | undefined };
 }) => {
+  const session = await getSessionUser();
+  const role = session?.role;
+  const currentUserId = session?.id;
 
-  const { userId, sessionClaims } = auth();
-  const role = (sessionClaims?.metadata as { role?: string })?.role;
-  const currentUserId = userId;
-  
-  
+
   const columns = [
     {
       header: "Subject Name",
@@ -46,16 +46,21 @@ const AssignmentListPage = async ({
       accessor: "dueDate",
       className: "hidden md:table-cell",
     },
+    {
+      header: "Resources",
+      accessor: "resources",
+      className: "hidden md:table-cell",
+    },
     ...(role === "admin" || role === "teacher"
       ? [
-          {
-            header: "Actions",
-            accessor: "action",
-          },
-        ]
+        {
+          header: "Actions",
+          accessor: "action",
+        },
+      ]
       : []),
   ];
-  
+
   const renderRow = (item: AssignmentList) => (
     <tr
       key={item.id}
@@ -68,6 +73,16 @@ const AssignmentListPage = async ({
       </td>
       <td className="hidden md:table-cell">
         {new Intl.DateTimeFormat("en-US").format(item.dueDate)}
+      </td>
+      <td className="hidden md:table-cell">
+        <div className="flex flex-col gap-1">
+          {item.resources.map((res: any) => (
+            <a key={res.id} href={res.url} target="_blank" className="text-blue-500 hover:underline text-xs">
+              {res.title}
+            </a>
+          ))}
+          {item.resources.length === 0 && <span className="text-gray-400 text-xs">No resources</span>}
+        </div>
       </td>
       <td>
         <div className="flex items-center gap-2">
@@ -155,6 +170,7 @@ const AssignmentListPage = async ({
             class: { select: { name: true } },
           },
         },
+        resources: { select: { id: true, title: true, url: true } },
       },
       take: ITEM_PER_PAGE,
       skip: ITEM_PER_PAGE * (p - 1),
@@ -179,7 +195,7 @@ const AssignmentListPage = async ({
             </button>
             {role === "admin" ||
               (role === "teacher" && (
-                <FormModal table="assignment" type="create" />
+                <FormContainer table="assignment" type="create" />
               ))}
           </div>
         </div>

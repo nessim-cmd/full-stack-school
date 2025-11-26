@@ -1,9 +1,10 @@
 import prisma from "@/lib/prisma";
-import { auth } from "@clerk/nextjs/server";
+import { auth } from "@/lib/auth-context";
 
 const Announcements = async () => {
-  const { userId, sessionClaims } = auth();
-  const role = (sessionClaims?.metadata as { role?: string })?.role;
+  const authData = await auth();
+  const role = authData?.role;
+  const userId = authData?.userId;
 
   const roleConditions = {
     teacher: { lessons: { some: { teacherId: userId! } } },

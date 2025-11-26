@@ -2,11 +2,16 @@
 
 import {
   deleteClass,
+  deleteEvent,
   deleteExam,
+  deleteLesson,
   deleteParent,
+  deleteResource,
+  deleteResult,
   deleteStudent,
   deleteSubject,
   deleteTeacher,
+  deleteMessage,
 } from "@/lib/actions";
 import dynamic from "next/dynamic";
 import Image from "next/image";
@@ -22,14 +27,15 @@ const deleteActionMap = {
   teacher: deleteTeacher,
   student: deleteStudent,
   exam: deleteExam,
-  // TODO: OTHER DELETE ACTIONS
   parent: deleteParent,
-  lesson: deleteSubject,
+  lesson: deleteLesson,
   assignment: deleteSubject,
-  result: deleteSubject,
+  result: deleteResult,
   attendance: deleteSubject,
-  event: deleteSubject,
+  event: deleteEvent,
   announcement: deleteSubject,
+  resource: deleteResource,
+  message: deleteMessage,
 };
 
 // USE LAZY LOADING
@@ -52,9 +58,32 @@ const ClassForm = dynamic(() => import("./forms/ClassForm"), {
 const ExamForm = dynamic(() => import("./forms/ExamForm"), {
   loading: () => <h1>Loading...</h1>,
 });
-// TODO: OTHER FORMS
 
 const ParentForm = dynamic(() => import("./forms/ParentForm"), {
+  loading: () => <h1>Loading...</h1>,
+});
+
+const LessonForm = dynamic(() => import("./forms/LessonForm"), {
+  loading: () => <h1>Loading...</h1>,
+});
+
+const EventForm = dynamic(() => import("./forms/EventForm"), {
+  loading: () => <h1>Loading...</h1>,
+});
+
+const ResourceForm = dynamic(() => import("./forms/ResourceForm"), {
+  loading: () => <h1>Loading...</h1>,
+});
+
+const ResultForm = dynamic(() => import("./forms/ResultForm"), {
+  loading: () => <h1>Loading...</h1>,
+});
+
+const MessageForm = dynamic(() => import("./forms/MessageForm"), {
+  loading: () => <h1>Loading...</h1>,
+});
+
+const AssignmentForm = dynamic(() => import("./forms/AssignmentForm"), {
   loading: () => <h1>Loading...</h1>,
 });
 
@@ -114,6 +143,54 @@ const forms: {
       relatedData={relatedData}
     />
   ),
+  lesson: (setOpen, type, data, relatedData) => (
+    <LessonForm
+      type={type}
+      data={data}
+      setOpen={setOpen}
+      relatedData={relatedData}
+    />
+  ),
+  event: (setOpen, type, data, relatedData) => (
+    <EventForm
+      type={type}
+      data={data}
+      setOpen={setOpen}
+      relatedData={relatedData}
+    />
+  ),
+  resource: (setOpen, type, data, relatedData) => (
+    <ResourceForm
+      type={type}
+      data={data}
+      setOpen={setOpen}
+      relatedData={relatedData}
+    />
+  ),
+  result: (setOpen, type, data, relatedData) => (
+    <ResultForm
+      type={type}
+      data={data}
+      setOpen={setOpen}
+      relatedData={relatedData}
+    />
+  ),
+  message: (setOpen, type, data, relatedData) => (
+    <MessageForm
+      type={type}
+      data={data}
+      setOpen={setOpen}
+      relatedData={relatedData}
+    />
+  ),
+  assignment: (setOpen, type, data, relatedData) => (
+    <AssignmentForm
+      type={type}
+      data={data}
+      setOpen={setOpen}
+      relatedData={relatedData}
+    />
+  ),
 };
 
 const FormModal = ({
@@ -137,6 +214,7 @@ const FormModal = ({
     const [state, formAction] = useFormState(deleteActionMap[table], {
       success: false,
       error: false,
+      message: "",
     });
 
     const router = useRouter();
@@ -155,12 +233,23 @@ const FormModal = ({
         <span className="text-center font-medium">
           All data will be lost. Are you sure you want to delete this {table}?
         </span>
+        {state.error && (
+          <span className="text-red-500 text-center text-sm">
+            {state.message || "Something went wrong!"}
+          </span>
+        )}
         <button className="bg-red-700 text-white py-2 px-4 rounded-md border-none w-max self-center">
           Delete
         </button>
       </form>
     ) : type === "create" || type === "update" ? (
-      forms[table](setOpen, type, data, relatedData)
+      forms[table] ? (
+        forms[table](setOpen, type, data, relatedData)
+      ) : (
+        <div className="p-4 text-center text-gray-500">
+          Form for {table} is not available yet.
+        </div>
+      )
     ) : (
       "Form not found!"
     );

@@ -1,4 +1,4 @@
-import { currentUser } from "@clerk/nextjs/server";
+import { getSessionUser } from "@/lib/authUser";
 import Image from "next/image";
 import Link from "next/link";
 
@@ -29,6 +29,12 @@ const menuItems = [
         label: "Parents",
         href: "/list/parents",
         visible: ["admin", "teacher"],
+      },
+      {
+        icon: "/student.png",
+        label: "Applications",
+        href: "/list/applications",
+        visible: ["admin"],
       },
       {
         icon: "/subject.png",
@@ -68,6 +74,12 @@ const menuItems = [
       },
       {
         icon: "/attendance.png",
+        label: "Mark Attendance",
+        href: "/attendance",
+        visible: ["teacher"],
+      },
+      {
+        icon: "/attendance.png",
         label: "Attendance",
         href: "/list/attendance",
         visible: ["admin", "teacher", "student", "parent"],
@@ -86,8 +98,14 @@ const menuItems = [
       },
       {
         icon: "/announcement.png",
-        label: "Announcements",
-        href: "/list/announcements",
+        label: "Notifications",
+        href: "/notifications",
+        visible: ["admin", "teacher", "student", "parent"],
+      },
+      {
+        icon: "/lesson.png",
+        label: "Support Cours",
+        href: "/list/resources",
         visible: ["admin", "teacher", "student", "parent"],
       },
     ],
@@ -118,8 +136,9 @@ const menuItems = [
 ];
 
 const Menu = async () => {
-  const user = await currentUser();
-  const role = user?.publicMetadata.role as string;
+  const user = await getSessionUser();
+  const role = user?.role || "guest";
+
   return (
     <div className="mt-4 text-sm">
       {menuItems.map((i) => (
@@ -131,7 +150,7 @@ const Menu = async () => {
             if (item.visible.includes(role)) {
               return (
                 <Link
-                  href={item.href}
+                  href={item.label === "Home" ? `/${role}` : item.href}
                   key={item.label}
                   className="flex items-center justify-center lg:justify-start gap-4 text-gray-500 py-2 md:px-2 rounded-md hover:bg-lamaSkyLight"
                 >

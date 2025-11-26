@@ -1,3 +1,4 @@
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -10,11 +11,13 @@ datasource db {
 model Admin {
   id       String @id
   username String @unique
+  password String @default("")
 }
 
 model Student {
   id          String       @id
   username    String       @unique
+  password    String       @default("")
   name        String
   surname     String
   email       String?      @unique
@@ -36,8 +39,9 @@ model Student {
 }
 
 model Teacher {
-  id        String    @id
-  username  String    @unique
+  id        String @id
+  username  String @unique
+  password  String @default("")
   name      String
   surname   String
   email     String?   @unique
@@ -56,6 +60,7 @@ model Teacher {
 model Parent {
   id        String    @id
   username  String    @unique
+  password  String    @default("")
   name      String
   surname   String
   email     String?   @unique
@@ -64,6 +69,7 @@ model Parent {
   createdAt DateTime  @default(now())
   students  Student[]
 }
+
 
 model Grade {
   id    Int @id @default(autoincrement())
@@ -95,6 +101,7 @@ model Subject {
   lessons  Lesson[]
 }
 
+
 model Lesson {
   id        Int      @id @default(autoincrement())
   name      String
@@ -111,6 +118,7 @@ model Lesson {
   exams       Exam[]
   assignments Assignment[]
   attendances Attendance[]
+  resources   Resource[]
 }
 
 model Exam {
@@ -133,6 +141,7 @@ model Assignment {
   lessonId Int
   lesson   Lesson   @relation(fields: [lessonId], references: [id])
   results  Result[]
+  resources Resource[]
 }
 
 model Result {
@@ -146,6 +155,19 @@ model Result {
   studentId    String
   student      Student     @relation(fields: [studentId], references: [id])
 }
+
+model Resource {
+  id        Int      @id @default(autoincrement())
+  title     String
+  url       String
+  createdAt DateTime @default(now())
+
+  lessonId     Int?
+  lesson       Lesson?     @relation(fields: [lessonId], references: [id])
+  assignmentId Int?
+  assignment   Assignment? @relation(fields: [assignmentId], references: [id])
+}
+
 
 model Attendance {
   id      Int      @id @default(autoincrement())
@@ -179,6 +201,44 @@ model Announcement {
   class   Class? @relation(fields: [classId], references: [id])
 }
 
+model Notification {
+  id          Int      @id @default(autoincrement())
+  title       String
+  message     String
+  type        String   // "password_change", "absence", "general"
+  read        Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  
+  // Polymorphic relationship - userId can be admin, teacher, student, or parent
+  userId      String
+  userRole    String   // "admin", "teacher", "student", "parent"
+}
+
+model Message {
+  id        Int      @id @default(autoincrement())
+  subject   String
+  content   String
+  createdAt DateTime @default(now())
+
+  senderId    String
+  senderName  String
+  senderRole  String
+
+  recipients MessageRecipient[]
+}
+
+model MessageRecipient {
+  id            String   @id @default(uuid())
+  messageId     Int
+  message       Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  
+  recipientId   String
+  recipientName String
+  recipientRole String // "admin", "teacher", "student", "parent"
+  
+  read          Boolean  @default(false)
+}
+
 enum UserSex {
   MALE
   FEMALE
@@ -191,3 +251,93 @@ enum Day {
   THURSDAY
   FRIDAY
 }
+
+
+model PasswordResetToken {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  token     String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+model RegistrationRequest {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now())
+  status    RequestStatus @default(PENDING)
+
+  // Student Info
+  studentName      String
+  studentSurname   String
+  studentEmail     String?
+  studentPhone     String?
+  studentAddress   String
+  studentBloodType String
+  studentSex       UserSex
+  studentBirthday  DateTime
+  gradeId          Int
+
+  // Parent Info
+  parentName    String
+  parentSurname String
+  parentEmail   String
+  parentPhone   String
+  parentAddress String
+}
+
+enum RequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model SiteSettings {
+  id Int @id @default(1)
+  
+  // Branding
+  schoolName        String @default("SchoolHub")
+  schoolLogo        String? // URL to logo image
+  schoolTagline     String @default("Excellence in Education Since 1995")
+  
+  // Hero Section
+  heroTitle         String @default("Welcome to SchoolHub")
+  heroDescription   String @default("Empowering students to achieve their full potential through innovative learning, dedicated teachers, and a nurturing environment. Join our community of excellence.")
+  heroImage         String? // URL to hero image
+  
+  // Stats
+  totalStudents     String @default("2,500+")
+  totalTeachers     String @default("150+")
+  successRate       String @default("98%")
+  yearsExperience   String @default("30+")
+  
+  // About Section
+  missionTitle      String @default("Our Mission")
+  missionText       String @default("To provide world-class education that nurtures critical thinking, creativity, and character development in every student.")
+  visionTitle       String @default("Our Vision")
+  visionText        String @default("To be the leading educational institution that prepares students for global citizenship and lifelong success.")
+  valuesTitle       String @default("Our Values")
+  valuesText        String @default("Excellence, Integrity, Innovation, Respect, and Community - the pillars that guide everything we do.")
+  
+  // Programs (JSON array of {grade, range, description, color})
+  programs          String @default("[{\"grade\":\"Elementary\",\"range\":\"Grades 1-5\",\"description\":\"Building strong foundations in core subjects with engaging, hands-on learning.\",\"color\":\"from-green-400 to-emerald-500\"},{\"grade\":\"Middle School\",\"range\":\"Grades 6-8\",\"description\":\"Developing critical thinking and preparing for advanced academic challenges.\",\"color\":\"from-blue-400 to-cyan-500\"},{\"grade\":\"High School\",\"range\":\"Grades 9-12\",\"description\":\"College preparation with AP courses and comprehensive career guidance.\",\"color\":\"from-purple-400 to-pink-500\"}]")
+  
+  // Certifications (JSON array of strings)
+  certifications    String @default("[\"International Baccalaureate\",\"Ministry of Education\",\"Cambridge Assessment\",\"ISO 9001:2015 Certified\"]")
+  
+  // Contact Information
+  address           String @default("123 Education Street, Knowledge City, KC 12345")
+  phone             String @default("+1 (555) 123-4567")
+  email             String @default("info@schoolhub.edu")
+  
+  // Social Media
+  facebookUrl       String?
+  twitterUrl        String?
+  instagramUrl      String?
+  
+  // CTA Section
+  ctaTitle          String @default("Ready to Join Our Community?")
+  ctaDescription    String @default("Start your journey towards academic excellence today. Apply now and become part of our thriving educational family.")
+  
+  updatedAt         DateTime @updatedAt
+}
+

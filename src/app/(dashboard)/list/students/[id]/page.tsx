@@ -4,31 +4,33 @@ import FormContainer from "@/components/FormContainer";
 import Performance from "@/components/Performance";
 import StudentAttendanceCard from "@/components/StudentAttendanceCard";
 import prisma from "@/lib/prisma";
-import { auth } from "@clerk/nextjs/server";
+
 import { Class, Student } from "@prisma/client";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 
+import { getSessionUser } from "@/lib/authUser";
+
 const SingleStudentPage = async ({
   params: { id },
 }: {
   params: { id: string };
 }) => {
-  const { sessionClaims } = auth();
-  const role = (sessionClaims?.metadata as { role?: string })?.role;
+  const session = await getSessionUser();
+  const role = session?.role;
 
   const student:
     | (Student & {
-        class: Class & { _count: { lessons: number } };
-      })
+      class: Class & { _count: { lessons: number } };
+    })
     | null = await prisma.student.findUnique({
-    where: { id },
-    include: {
-      class: { include: { _count: { select: { lessons: true } } } },
-    },
-  });
+      where: { id },
+      include: {
+        class: { include: { _count: { select: { lessons: true } } } },
+      },
+    });
 
   if (!student) {
     return notFound();

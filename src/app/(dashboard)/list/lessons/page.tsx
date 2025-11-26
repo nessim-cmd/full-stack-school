@@ -6,11 +6,11 @@ import prisma from "@/lib/prisma";
 import { ITEM_PER_PAGE } from "@/lib/settings";
 import { Class, Lesson, Prisma, Subject, Teacher } from "@prisma/client";
 import Image from "next/image";
-import { auth } from "@clerk/nextjs/server";
+import { getSessionUser } from "@/lib/authUser";
 
 type LessonList = Lesson & { subject: Subject } & { class: Class } & {
   teacher: Teacher;
-};
+} & { resources: { id: number; title: string; url: string }[] };
 
 
 const LessonListPage = async ({
@@ -19,56 +19,71 @@ const LessonListPage = async ({
   searchParams: { [key: string]: string | undefined };
 }) => {
 
-const { sessionClaims } = auth();
-const role = (sessionClaims?.metadata as { role?: string })?.role;
+  const session = await getSessionUser();
+  const role = session?.role;
 
 
-const columns = [
-  {
-    header: "Subject Name",
-    accessor: "name",
-  },
-  {
-    header: "Class",
-    accessor: "class",
-  },
-  {
-    header: "Teacher",
-    accessor: "teacher",
-    className: "hidden md:table-cell",
-  },
-  ...(role === "admin"
-    ? [
+  const columns = [
+    {
+      header: "Subject Name",
+      accessor: "name",
+    },
+    {
+      header: "Class",
+      accessor: "class",
+    },
+    {
+      header: "Teacher",
+      accessor: "teacher",
+      className: "hidden md:table-cell",
+    },
+    {
+      header: "Resources",
+      accessor: "resources",
+      className: "hidden md:table-cell",
+    },
+    ...(role === "admin" || role === "teacher"
+      ? [
         {
           header: "Actions",
           accessor: "action",
         },
       ]
-    : []),
-];
+      : []),
+  ];
 
-const renderRow = (item: LessonList) => (
-  <tr
-    key={item.id}
-    className="border-b border-gray-200 even:bg-slate-50 text-sm hover:bg-lamaPurpleLight"
-  >
-    <td className="flex items-center gap-4 p-4">{item.subject.name}</td>
-    <td>{item.class.name}</td>
-    <td className="hidden md:table-cell">
-      {item.teacher.name + " " + item.teacher.surname}
-    </td>
-    <td>
-      <div className="flex items-center gap-2">
-        {role === "admin" && (
-          <>
-            <FormContainer table="lesson" type="update" data={item} />
-            <FormContainer table="lesson" type="delete" id={item.id} />
-          </>
-        )}
-      </div>
-    </td>
-  </tr>
-);
+  const renderRow = (item: LessonList) => (
+    <tr
+      key={item.id}
+      className="border-b border-gray-200 even:bg-slate-50 text-sm hover:bg-lamaPurpleLight"
+    >
+      <td className="flex items-center gap-4 p-4">{item.subject.name}</td>
+      <td>{item.class.name}</td>
+      <td className="hidden md:table-cell">
+        {item.teacher.name + " " + item.teacher.surname}
+      </td>
+      <td className="hidden md:table-cell">
+        <div className="flex flex-col gap-1">
+          {item.resources.map((res: any) => (
+            <a key={res.id} href={res.url} target="_blank" className="text-blue-500 hover:underline text-xs">
+              {res.title}
+            </a>
+          ))}
+          {item.resources.length === 0 && <span className="text-gray-400 text-xs">No resources</span>}
+        </div>
+      </td>
+      <td>
+        <div className="flex items-center gap-2">
+          {role === "admin" && (
+            <>
+              <FormContainer table="lesson" type="update" data={item} />
+              <FormContainer table="lesson" type="delete" id={item.id} />
+            </>
+          )}
+        </div>
+      </td>
+    </tr>
+  );
 
   const { page, ...queryParams } = searchParams;
 
@@ -108,6 +123,7 @@ const renderRow = (item: LessonList) => (
         subject: { select: { name: true } },
         class: { select: { name: true } },
         teacher: { select: { name: true, surname: true } },
+        resources: { select: { id: true, title: true, url: true } },
       },
       take: ITEM_PER_PAGE,
       skip: ITEM_PER_PAGE * (p - 1),

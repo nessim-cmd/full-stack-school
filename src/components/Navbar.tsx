@@ -1,9 +1,45 @@
-import { UserButton } from "@clerk/nextjs";
-import { currentUser } from "@clerk/nextjs/server";
 import Image from "next/image";
+import { getSessionUser } from "@/lib/authUser";
+import UserButton from "./UserButton";
+import NotificationBell from "./NotificationBell";
+import prisma from "@/lib/prisma";
+import { getUnreadNotifications } from "@/lib/notification-actions";
 
 const Navbar = async () => {
-  const user = await currentUser();
+  const session = await getSessionUser();
+
+  let userImage = "/noAvatar.png";
+  let notifications: any[] = [];
+
+  if (session) {
+    // Fetch user data based on role to get profile image
+    // Note: Admin and Parent models don't have img field
+    let userData: any = null;
+
+    switch (session.role) {
+      case "teacher":
+        userData = await prisma.teacher.findUnique({
+          where: { id: session.id },
+          select: { img: true },
+        });
+        break;
+      case "student":
+        userData = await prisma.student.findUnique({
+          where: { id: session.id },
+          select: { img: true },
+        });
+        break;
+      // Admin and Parent don't have img field, so they'll use default avatar
+    }
+
+    if (userData?.img) {
+      userImage = userData.img;
+    }
+
+    // Fetch notifications
+    notifications = await getUnreadNotifications(session.id, session.role);
+  }
+
   return (
     <div className="flex items-center justify-between p-4">
       {/* SEARCH BAR */}
@@ -20,20 +56,20 @@ const Navbar = async () => {
         <div className="bg-white rounded-full w-7 h-7 flex items-center justify-center cursor-pointer">
           <Image src="/message.png" alt="" width={20} height={20} />
         </div>
-        <div className="bg-white rounded-full w-7 h-7 flex items-center justify-center cursor-pointer relative">
-          <Image src="/announcement.png" alt="" width={20} height={20} />
-          <div className="absolute -top-3 -right-3 w-5 h-5 flex items-center justify-center bg-purple-500 text-white rounded-full text-xs">
-            1
-          </div>
-        </div>
-        <div className="flex flex-col">
-          <span className="text-xs leading-3 font-medium">John Doe</span>
-          <span className="text-[10px] text-gray-500 text-right">
-            {user?.publicMetadata?.role as string}
-          </span>
-        </div>
-        {/* <Image src="/avatar.png" alt="" width={36} height={36} className="rounded-full"/> */}
-        <UserButton />
+        {session && (
+          <NotificationBell
+            initialNotifications={notifications}
+            userId={session.id}
+            userRole={session.role}
+          />
+        )}
+        {session && (
+          <UserButton
+            username={session.username}
+            role={session.role}
+            userImage={userImage}
+          />
+        )}
       </div>
     </div>
   );

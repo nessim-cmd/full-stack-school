@@ -5,8 +5,8 @@ import TableSearch from "@/components/TableSearch";
 import prisma from "@/lib/prisma";
 import { ITEM_PER_PAGE } from "@/lib/settings";
 import { Class, Event, Prisma } from "@prisma/client";
+import { getSessionUser } from "@/lib/authUser";
 import Image from "next/image";
-import { auth } from "@clerk/nextjs/server";
 
 type EventList = Event & { class: Class };
 
@@ -15,10 +15,9 @@ const EventListPage = async ({
 }: {
   searchParams: { [key: string]: string | undefined };
 }) => {
-
-  const { userId, sessionClaims } = auth();
-  const role = (sessionClaims?.metadata as { role?: string })?.role;
-  const currentUserId = userId;
+  const session = await getSessionUser();
+  const role = session?.role;
+  const currentUserId = session?.id;
 
   const columns = [
     {
@@ -46,11 +45,11 @@ const EventListPage = async ({
     },
     ...(role === "admin"
       ? [
-          {
-            header: "Actions",
-            accessor: "action",
-          },
-        ]
+        {
+          header: "Actions",
+          accessor: "action",
+        },
+      ]
       : []),
   ];
 
@@ -121,12 +120,15 @@ const EventListPage = async ({
     parent: { students: { some: { parentId: currentUserId! } } },
   };
 
-  query.OR = [
-    { classId: null },
-    {
-      class: roleConditions[role as keyof typeof roleConditions] || {},
-    },
-  ];
+  // Only apply role-based filtering for non-admin users
+  if (role !== "admin") {
+    query.OR = [
+      { classId: null },
+      {
+        class: roleConditions[role as keyof typeof roleConditions] || {},
+      },
+    ];
+  }
 
   const [data, count] = await prisma.$transaction([
     prisma.event.findMany({
