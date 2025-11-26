@@ -24,4 +24,5 @@ export const routeAccessMap: RouteAccessMap = {
   "^/list/announcements": ["admin", "teacher", "student", "parent"],
   "^/list/applications": ["admin"],
   "^/settings": ["admin"],
+  "^/api/settings": ["admin"],
 };
