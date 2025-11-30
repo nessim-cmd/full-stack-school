@@ -3,9 +3,12 @@ import { cookies } from "next/headers";
 import { verifyToken } from "./auth";
 
 export interface SessionUser {
-    id: string;
+    userId: string;
     username: string;
+    userType: "manager" | "admin" | "teacher" | "student" | "parent";
     role: string;
+    schoolId: string;
+    managerId?: string; // Only present for managers
 }
 
 /**
@@ -27,8 +30,23 @@ export async function getSessionUser(): Promise<SessionUser | null> {
     }
 
     return {
-        id: payload.id as string,
+        userId: payload.userId as string,
         username: payload.username as string,
+        userType: payload.userType as any,
         role: payload.role as string,
+        schoolId: payload.schoolId as string,
+        managerId: payload.managerId as string | undefined,
     };
+}
+
+/**
+ * Helper function to get just the schoolId from the session
+ * Throws an error if no session exists
+ */
+export async function getSchoolId(): Promise<string> {
+    const session = await getSessionUser();
+    if (!session?.schoolId) {
+        throw new Error("No active school session");
+    }
+    return session.schoolId;
 }

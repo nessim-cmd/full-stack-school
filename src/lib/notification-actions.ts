@@ -3,12 +3,15 @@
 import prisma from "./prisma";
 import { revalidatePath } from "next/cache";
 
+import { redis } from "./redis";
+
 export async function createNotification(
     userId: string,
     userRole: string,
     title: string,
     message: string,
-    type: "password_change" | "absence" | "event" | "general" | "message"
+    type: "password_change" | "absence" | "event" | "general" | "message" | "ticket_reply" | "ticket_created",
+    schoolId: string
 ) {
     try {
         console.log("[Notification] Creating notification:", {
@@ -16,6 +19,7 @@ export async function createNotification(
             userRole,
             title,
             type,
+            schoolId
         });
 
         const notification = await prisma.notification.create({
@@ -26,10 +30,16 @@ export async function createNotification(
                 message,
                 type,
                 read: false,
+                schoolId,
             },
         });
 
-        console.log("[Notification] Created successfully:", notification.id);
+        // Publish to Redis
+        // We publish to a specific user channel
+        const channel = `notifications:${userId}`;
+        await redis.publish(channel, JSON.stringify(notification));
+
+        console.log("[Notification] Created and published successfully:", notification.id);
 
         revalidatePath("/");
         return { success: true };
@@ -118,7 +128,8 @@ export async function notifyEventCreation(
     eventDescription: string,
     startTime: Date,
     endTime: Date,
-    classId: number | null
+    classId: number | null,
+    schoolId: string
 ) {
     try {
         console.log("[Event Notification] Starting notification process for event:", eventTitle);
@@ -219,12 +230,15 @@ export async function notifyEventCreation(
 
             const [teachers, students, parents] = await Promise.all([
                 prisma.teacher.findMany({
+                    where: { schoolId },
                     select: { id: true, name: true, surname: true, email: true },
                 }),
                 prisma.student.findMany({
+                    where: { schoolId },
                     select: { id: true, name: true, surname: true, email: true },
                 }),
                 prisma.parent.findMany({
+                    where: { schoolId },
                     select: { id: true, name: true, surname: true, email: true },
                 }),
             ]);
@@ -254,7 +268,8 @@ export async function notifyEventCreation(
                 user.role,
                 `📅 New Event${classInfo}: ${eventTitle}`,
                 notificationMessage,
-                "event"
+                "event",
+                schoolId
             );
 
             // Send email if user has email

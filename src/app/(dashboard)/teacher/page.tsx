@@ -5,7 +5,7 @@ import { getSessionUser } from "@/lib/authUser";
 
 const TeacherPage = async () => {
   const session = await getSessionUser();
-  const userId = session?.id;
+  const userId = session?.userId;
   return (
     <div className="flex-1 p-4 flex gap-4 flex-col xl:flex-row">
       {/* LEFT */}

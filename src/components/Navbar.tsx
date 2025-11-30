@@ -19,13 +19,13 @@ const Navbar = async () => {
     switch (session.role) {
       case "teacher":
         userData = await prisma.teacher.findUnique({
-          where: { id: session.id },
+          where: { id: session.userId },
           select: { img: true },
         });
         break;
       case "student":
         userData = await prisma.student.findUnique({
-          where: { id: session.id },
+          where: { id: session.userId },
           select: { img: true },
         });
         break;
@@ -37,7 +37,7 @@ const Navbar = async () => {
     }
 
     // Fetch notifications
-    notifications = await getUnreadNotifications(session.id, session.role);
+    notifications = await getUnreadNotifications(session.userId, session.role);
   }
 
   return (
@@ -59,7 +59,7 @@ const Navbar = async () => {
         {session && (
           <NotificationBell
             initialNotifications={notifications}
-            userId={session.id}
+            userId={session.userId}
             userRole={session.role}
           />
         )}

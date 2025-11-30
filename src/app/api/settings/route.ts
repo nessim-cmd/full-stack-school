@@ -1,17 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
+import { getSchoolId } from "@/lib/authUser";
 
-// GET - Fetch site settings
+// GET - Fetch site settings for the current school
 export async function GET() {
     try {
+        const schoolId = await getSchoolId();
+
         let settings = await prisma.siteSettings.findUnique({
-            where: { id: 1 },
+            where: { schoolId },
         });
 
-        // If no settings exist, create default ones
+        // If no settings exist for this school, create default ones
         if (!settings) {
             settings = await prisma.siteSettings.create({
-                data: { id: 1 },
+                data: { schoolId },
             });
         }
 
@@ -22,18 +25,19 @@ export async function GET() {
     }
 }
 
-// PUT - Update site settings
+// PUT - Update site settings for the current school
 export async function PUT(req: NextRequest) {
     try {
+        const schoolId = await getSchoolId();
         const body = await req.json();
 
-        // Remove id from update data
-        const { id, updatedAt, ...updateData } = body;
+        // Remove fields that shouldn't be updated
+        const { id, updatedAt, schoolId: _, ...updateData } = body;
 
         const settings = await prisma.siteSettings.upsert({
-            where: { id: 1 },
+            where: { schoolId },
             update: updateData,
-            create: { id: 1, ...updateData },
+            create: { schoolId, ...updateData },
         });
 
         return NextResponse.json(settings);

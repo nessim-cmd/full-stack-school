@@ -23,7 +23,7 @@ const ExamListPage = async ({
 }) => {
   const session = await getSessionUser();
   const role = session?.role;
-  const currentUserId = session?.id;
+  const currentUserId = session?.userId;
 
 
   const columns = [
@@ -87,7 +87,9 @@ const ExamListPage = async ({
 
   // URL PARAMS CONDITION
 
-  const query: Prisma.ExamWhereInput = {};
+  const query: Prisma.ExamWhereInput = {
+    schoolId: session!.schoolId,
+  };
 
   query.lesson = {};
   if (queryParams) {

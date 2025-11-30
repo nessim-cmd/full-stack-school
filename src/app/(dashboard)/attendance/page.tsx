@@ -18,7 +18,7 @@ const AttendancePage = async ({
     // Get teacher's lessons
     const lessons = await prisma.lesson.findMany({
         where: {
-            teacherId: session.id,
+            teacherId: session.userId,
         },
         include: {
             subject: true,

@@ -8,10 +8,127 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model SuperAdmin {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  auditLogs AuditLog[]
+}
+
+model AuditLog {
+  id          Int      @id @default(autoincrement())
+  action      String   // "school_created", "school_suspended", "plan_changed", etc.
+  entity      String   // "school", "user", "subscription", etc.
+  entityId    String
+  description String
+  metadata    String?  // JSON string for additional data
+  createdAt   DateTime @default(now())
+  
+  superAdminId String
+  superAdmin   SuperAdmin @relation(fields: [superAdminId], references: [id], onDelete: Cascade)
+}
+
+model School {
+  id              String   @id @default(uuid())
+  name            String
+  slug            String   @unique // subdomain
+  domain          String?  @unique // custom domain
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  // Subscription
+  plan            PlanType @default(FREE)
+  subscriptionStatus SubscriptionStatus @default(TRIAL)
+  trialEndsAt     DateTime
+  subscriptionEndsAt DateTime?
+  
+  // Relations
+  admins          Admin[]
+  students        Student[]
+  teachers        Teacher[]
+  parents         Parent[]
+  grades          Grade[]
+  classes         Class[]
+  subjects        Subject[]
+  lessons         Lesson[]
+  exams           Exam[]
+  assignments     Assignment[]
+  results         Result[]
+  attendances     Attendance[]
+  events          Event[]
+  announcements   Announcement[]
+  resources       Resource[]
+  notifications   Notification[]
+  messages        Message[]
+  registrationRequests RegistrationRequest[]
+  invoices        Invoice[]
+  tickets         SupportTicket[]
+  
+  settings        SiteSettings?
+  memberships     SchoolMembership[]
+  
+  // Finance
+  feeCategories   FeeCategory[]
+  feeStructures   FeeStructure[]
+  studentInvoices StudentInvoice[]
+  payments        Payment[]
+  
+  // Teacher Payroll
+  payrollRates    TeacherPayrollRate[]
+  payrolls        TeacherPayroll[]
+}
+
+
+model SchoolManager {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  schools   SchoolMembership[]
+}
+
+model SchoolMembership {
+  id        String   @id @default(uuid())
+  
+  managerId String
+  manager   SchoolManager @relation(fields: [managerId], references: [id], onDelete: Cascade)
+  
+  schoolId  String
+  school    School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  
+  role      String @default("owner") // "owner", "admin", etc.
+  createdAt DateTime @default(now())
+  
+  @@unique([managerId, schoolId])
+}
+
+enum PlanType {
+  FREE
+  MONTHLY
+  YEARLY
+}
+
+enum SubscriptionStatus {
+  TRIAL
+  ACTIVE
+  PAST_DUE
+  CANCELED
+}
+
 model Admin {
   id       String @id
   username String @unique
   password String @default("")
+  
+  schoolId String
+  school   School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
 }
 
 model Student {
@@ -35,7 +152,11 @@ model Student {
   grade       Grade        @relation(fields: [gradeId], references: [id])
   attendances Attendance[]
   results     Result[]
+  invoices    StudentInvoice[]
   birthday    DateTime
+
+  schoolId String
+  school   School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
 }
 
 model Teacher {
@@ -55,6 +176,12 @@ model Teacher {
   lessons   Lesson[]
   classes   Class[]
   birthday  DateTime
+
+  schoolId String
+  school   School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  
+  payrollRates TeacherPayrollRate[]
+  payrolls     TeacherPayroll[]
 }
 
 model Parent {
@@ -68,20 +195,29 @@ model Parent {
   address   String
   createdAt DateTime  @default(now())
   students  Student[]
+
+  schoolId String
+  school   School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
 }
 
 
 model Grade {
   id    Int @id @default(autoincrement())
-  level Int @unique
-
+  level Int
+  
   students Student[]
   classess Class[]
+  feeStructures FeeStructure[]
+
+  schoolId String
+  school   School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@unique([level, schoolId])
 }
 
 model Class {
   id       Int    @id @default(autoincrement())
-  name     String @unique
+  name     String
   capacity Int
 
   supervisorId  String?
@@ -92,13 +228,23 @@ model Class {
   grade         Grade          @relation(fields: [gradeId], references: [id])
   events        Event[]
   announcements Announcement[]
+
+  schoolId String
+  school   School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@unique([name, schoolId])
 }
 
 model Subject {
   id       Int       @id @default(autoincrement())
-  name     String    @unique
+  name     String
   teachers Teacher[]
   lessons  Lesson[]
+
+  schoolId String
+  school   School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@unique([name, schoolId])
 }
 
 
@@ -119,6 +265,9 @@ model Lesson {
   assignments Assignment[]
   attendances Attendance[]
   resources   Resource[]
+
+  schoolId String
+  school   School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
 }
 
 model Exam {
@@ -130,6 +279,9 @@ model Exam {
   lessonId Int
   lesson   Lesson   @relation(fields: [lessonId], references: [id])
   results  Result[]
+
+  schoolId String
+  school   School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
 }
 
 model Assignment {
@@ -142,6 +294,9 @@ model Assignment {
   lesson   Lesson   @relation(fields: [lessonId], references: [id])
   results  Result[]
   resources Resource[]
+
+  schoolId String
+  school   School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
 }
 
 model Result {
@@ -154,6 +309,9 @@ model Result {
   assignment   Assignment? @relation(fields: [assignmentId], references: [id])
   studentId    String
   student      Student     @relation(fields: [studentId], references: [id])
+
+  schoolId String
+  school   School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
 }
 
 model Resource {
@@ -166,6 +324,9 @@ model Resource {
   lesson       Lesson?     @relation(fields: [lessonId], references: [id])
   assignmentId Int?
   assignment   Assignment? @relation(fields: [assignmentId], references: [id])
+
+  schoolId String
+  school   School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
 }
 
 
@@ -178,6 +339,9 @@ model Attendance {
   student   Student @relation(fields: [studentId], references: [id])
   lessonId  Int
   lesson    Lesson  @relation(fields: [lessonId], references: [id])
+
+  schoolId String
+  school   School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
 }
 
 model Event {
@@ -189,6 +353,9 @@ model Event {
 
   classId Int?
   class   Class? @relation(fields: [classId], references: [id])
+
+  schoolId String
+  school   School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
 }
 
 model Announcement {
@@ -199,6 +366,9 @@ model Announcement {
 
   classId Int?
   class   Class? @relation(fields: [classId], references: [id])
+
+  schoolId String
+  school   School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
 }
 
 model Notification {
@@ -212,6 +382,9 @@ model Notification {
   // Polymorphic relationship - userId can be admin, teacher, student, or parent
   userId      String
   userRole    String   // "admin", "teacher", "student", "parent"
+
+  schoolId String
+  school   School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
 }
 
 model Message {
@@ -225,6 +398,9 @@ model Message {
   senderRole  String
 
   recipients MessageRecipient[]
+
+  schoolId String
+  school   School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
 }
 
 model MessageRecipient {
@@ -283,6 +459,9 @@ model RegistrationRequest {
   parentEmail   String
   parentPhone   String
   parentAddress String
+
+  schoolId String
+  school   School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
 }
 
 enum RequestStatus {
@@ -292,7 +471,7 @@ enum RequestStatus {
 }
 
 model SiteSettings {
-  id Int @id @default(1)
+  id String @id @default(uuid())
   
   // Branding
   schoolName        String @default("SchoolHub")
@@ -339,5 +518,229 @@ model SiteSettings {
   ctaDescription    String @default("Start your journey towards academic excellence today. Apply now and become part of our thriving educational family.")
   
   updatedAt         DateTime @updatedAt
+
+  schoolId String @unique
+  school   School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
 }
 
+model Invoice {
+  id        String   @id @default(uuid())
+  schoolId  String
+  school    School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  amount    Float
+  status    InvoiceStatus @default(PENDING)
+  dueDate   DateTime
+  paidAt    DateTime?
+  plan      PlanType
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum InvoiceStatus {
+  PENDING
+  PAID
+  OVERDUE
+  CANCELLED
+  REFUNDED
+}
+
+model GlobalAnnouncement {
+  id        String   @id @default(uuid())
+  title     String
+  message   String
+  type      String   @default("INFO") // INFO, WARNING, CRITICAL
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model SupportTicket {
+  id        String   @id @default(uuid())
+  schoolId  String
+  school    School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  subject   String
+  message   String
+  status    TicketStatus @default(OPEN)
+  priority  TicketPriority @default(MEDIUM)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  replies   SupportTicketReply[]
+}
+
+model SupportTicketReply {
+  id        String   @id @default(uuid())
+  ticketId  String
+  ticket    SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  message   String
+  isAdmin   Boolean  // true if reply is from Super Admin, false if from School Admin
+  createdAt DateTime @default(now())
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  CLOSED
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+model SaasSettings {
+  id String @id @default(uuid())
+  
+  // Hero
+  heroTitle       String @default("Modern School Management Made Simple")
+  heroDescription String @default("Complete school management solution with student tracking, attendance, grades, messaging, and more. Get started in minutes with our powerful SaaS platform.")
+  
+  // Features (JSON)
+  features        String @default("[]") // JSON array
+  
+  // Pricing (JSON)
+  pricing         String @default("[]") // JSON array
+  
+  updatedAt       DateTime @updatedAt
+}
+
+model FeeCategory {
+  id          Int      @id @default(autoincrement())
+  name        String   // e.g., "Tuition Fee", "Bus Fee"
+  description String?
+  
+  schoolId    String
+  school      School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  
+  feeStructures FeeStructure[]
+}
+
+model FeeStructure {
+  id            Int      @id @default(autoincrement())
+  amount        Float
+  
+  feeCategoryId Int
+  feeCategory   FeeCategory @relation(fields: [feeCategoryId], references: [id])
+  
+  // Link to Grade or Class (usually fees are per grade)
+  gradeId       Int?
+  grade         Grade?   @relation(fields: [gradeId], references: [id])
+  
+  schoolId      String
+  school        School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+}
+
+model StudentInvoice {
+  id          String   @id @default(uuid())
+  title       String   // e.g. "Term 1 Tuition"
+  amount      Float
+  status      InvoiceStatus @default(PENDING)
+  dueDate     DateTime
+  
+  studentId   String
+  student     Student  @relation(fields: [studentId], references: [id])
+  
+  payments    Payment[]
+  
+  schoolId    String
+  school      School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Payment {
+  id               String   @id @default(uuid())
+  amount           Float
+  date             DateTime @default(now())
+  method           PaymentMethod // CASH, BANK_TRANSFER, CHECK, ONLINE
+  
+  invoiceId        String
+  invoice          StudentInvoice @relation(fields: [invoiceId], references: [id])
+  
+  schoolId         String
+  school           School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+}
+
+enum PaymentMethod {
+  CASH
+  BANK_TRANSFER
+  CHECK
+  ONLINE
+}
+
+// ============ TEACHER PAYROLL MODELS ============
+
+model TeacherPayrollRate {
+  id          String   @id @default(uuid())
+  hourlyRate  Float    // Price per hour
+  effectiveFrom DateTime @default(now())
+  effectiveTo DateTime?
+  
+  teacherId   String
+  teacher     Teacher @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  
+  schoolId    String
+  school      School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model TeacherPayroll {
+  id                String   @id @default(uuid())
+  
+  // Basic info
+  month             Int      // 1-12
+  year              Int
+  status            PayrollStatus @default(PENDING)
+  
+  // Calculations
+  totalHours        Float
+  hourlyRate        Float
+  baseSalary        Float   // totalHours * hourlyRate
+  totalDeductions   Float   @default(0)
+  netSalary         Float   // baseSalary - totalDeductions
+  
+  // Payment info
+  paidAt            DateTime?
+  paymentMethod     PaymentMethod?
+  notes             String?
+  
+  // Relations
+  teacherId         String
+  teacher           Teacher @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  
+  deductions        PayrollDeduction[]
+  
+  schoolId          String
+  school            School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  @@unique([teacherId, month, year, schoolId])
+}
+
+model PayrollDeduction {
+  id            String   @id @default(uuid())
+  reason        String   // "Tax", "Insurance", "Late Fee", "Absence Penalty", etc.
+  amount        Float
+  notes         String?
+  
+  payrollId     String
+  payroll       TeacherPayroll @relation(fields: [payrollId], references: [id], onDelete: Cascade)
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+enum PayrollStatus {
+  PENDING
+  CALCULATED
+  APPROVED
+  PAID
+  CANCELLED
+}

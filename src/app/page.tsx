@@ -2,23 +2,56 @@ import Image from "next/image";
 import Link from "next/link";
 import prisma from "@/lib/prisma";
 
-async function getSiteSettings() {
+async function getSiteSettings(schoolSlug?: string) {
+    let school;
+
+    if (schoolSlug) {
+        // Get school by slug from query parameter
+        school = await prisma.school.findUnique({
+            where: { slug: schoolSlug }
+        });
+    } else {
+        // Get the first school (for demo purposes)
+        school = await prisma.school.findFirst();
+    }
+
+    if (!school) {
+        throw new Error("No school found. Please set up a school first.");
+    }
+
     let settings = await prisma.siteSettings.findUnique({
-        where: { id: 1 },
+        where: { schoolId: school.id },
     });
 
     // If no settings exist, create default ones
     if (!settings) {
         settings = await prisma.siteSettings.create({
-            data: { id: 1 },
+            data: {
+                schoolId: school.id,
+                schoolName: school.name
+            },
         });
     }
 
-    return settings;
+    return { settings, school };
 }
 
-export default async function HomePage() {
-    const settings = await getSiteSettings();
+import { headers } from "next/headers";
+
+// ... imports ...
+
+export default async function HomePage({
+    searchParams,
+}: {
+    searchParams: { school?: string };
+}) {
+    const headersList = headers();
+    const subdomainSlug = headersList.get("x-school-slug");
+
+    // Prioritize subdomain, then query param
+    const schoolSlug = subdomainSlug || searchParams.school;
+
+    const { settings, school } = await getSiteSettings(schoolSlug);
 
     // Parse JSON fields
     const programs = JSON.parse(settings.programs);

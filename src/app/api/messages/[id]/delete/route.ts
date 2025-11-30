@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { getSessionUser } from "@/lib/authUser";
+import { getSessionUser, getSchoolId } from "@/lib/authUser";
 
 export async function POST(
     request: NextRequest,
@@ -8,13 +8,14 @@ export async function POST(
 ) {
     try {
         const session = await getSessionUser();
+        const schoolId = await getSchoolId();
         if (!session) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
         const messageId = parseInt(params.id);
-        const message = await prisma.message.findUnique({
-            where: { id: messageId },
+        const message = await prisma.message.findFirst({
+            where: { id: messageId, schoolId },
         });
 
         if (!message) {
@@ -22,12 +23,12 @@ export async function POST(
         }
 
         // Check permissions: admin or sender can delete
-        if (session.role !== "admin" && message.senderId !== session.id) {
+        if (session.role !== "admin" && message.senderId !== session.userId) {
             return NextResponse.json({ error: "Forbidden" }, { status: 403 });
         }
 
-        await prisma.message.delete({
-            where: { id: messageId },
+        await prisma.message.deleteMany({
+            where: { id: messageId, schoolId },
         });
 
         return NextResponse.redirect(new URL("/list/messages", request.url));

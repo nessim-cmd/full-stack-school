@@ -108,6 +108,12 @@ const menuItems = [
         href: "/list/resources",
         visible: ["admin", "teacher", "student", "parent"],
       },
+      {
+        icon: "/finance.png",
+        label: "Finance",
+        href: "/list/finance",
+        visible: ["admin"],
+      },
     ],
   },
   {
@@ -118,6 +124,12 @@ const menuItems = [
         label: "Profile",
         href: "/profile",
         visible: ["admin", "teacher", "student", "parent"],
+      },
+      {
+        icon: "/message.png",
+        label: "Support",
+        href: "/admin/support",
+        visible: ["admin"],
       },
       {
         icon: "/setting.png",

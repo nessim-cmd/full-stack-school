@@ -85,7 +85,9 @@ const ParentListPage = async ({
 
   // URL PARAMS CONDITION
 
-  const query: Prisma.ParentWhereInput = {};
+  const query: Prisma.ParentWhereInput = {
+    schoolId: session!.schoolId,
+  };
 
   if (queryParams) {
     for (const [key, value] of Object.entries(queryParams)) {

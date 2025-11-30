@@ -17,7 +17,7 @@ const MessageListPage = async ({
     searchParams: { [key: string]: string | undefined };
 }) => {
     const session = await getSessionUser();
-    const currentUserId = session?.id;
+    const currentUserId = session?.userId;
     const currentRole = session?.role;
 
     const { page, cat, ...queryParams } = searchParams;
@@ -25,7 +25,9 @@ const MessageListPage = async ({
     const category = cat || "inbox"; // "inbox" or "sent"
 
     // URL PARAMS CONDITION
-    const query: Prisma.MessageWhereInput = {};
+    const query: Prisma.MessageWhereInput = {
+        schoolId: session!.schoolId,
+    };
 
     if (queryParams) {
         for (const [key, value] of Object.entries(queryParams)) {

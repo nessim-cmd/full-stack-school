@@ -30,6 +30,36 @@ const NotificationBell = ({
     const [notifications, setNotifications] = useState(initialNotifications);
     const router = useRouter();
 
+    useEffect(() => {
+        // Connect to SSE endpoint
+        const eventSource = new EventSource("/api/sse");
+
+        eventSource.onmessage = (event) => {
+            try {
+                // Heartbeat check
+                if (event.data === ": heartbeat") return;
+
+                const newNotification = JSON.parse(event.data);
+
+                // Add new notification to the top
+                setNotifications((prev) => [newNotification, ...prev]);
+
+                // Optional: Play a sound or show a toast
+            } catch (error) {
+                console.error("Error parsing notification:", error);
+            }
+        };
+
+        eventSource.onerror = (error) => {
+            console.error("SSE Error:", error);
+            eventSource.close();
+        };
+
+        return () => {
+            eventSource.close();
+        };
+    }, []);
+
     const unreadCount = notifications.filter((n) => !n.read).length;
 
     const handleMarkAsRead = async (notificationId: number) => {
@@ -52,6 +82,10 @@ const NotificationBell = ({
                 return "🔐";
             case "absence":
                 return "⚠️";
+            case "ticket_reply":
+                return "💬";
+            case "ticket_created":
+                return "🎫";
             default:
                 return "📢";
         }

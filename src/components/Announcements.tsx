@@ -1,10 +1,11 @@
 import prisma from "@/lib/prisma";
-import { auth } from "@/lib/auth-context";
+import { getSessionUser } from "@/lib/authUser";
 
 const Announcements = async () => {
-  const authData = await auth();
-  const role = authData?.role;
-  const userId = authData?.userId;
+  const session = await getSessionUser();
+  const role = session?.role;
+  const userId = session?.userId;
+  const schoolId = session?.schoolId;
 
   const roleConditions = {
     teacher: { lessons: { some: { teacherId: userId! } } },
@@ -16,6 +17,7 @@ const Announcements = async () => {
     take: 3,
     orderBy: { date: "desc" },
     where: {
+      schoolId,
       ...(role !== "admin" && {
         OR: [
           { classId: null },

@@ -11,6 +11,9 @@ export default async function ApplicationsPage() {
     }
 
     const applications = await prisma.registrationRequest.findMany({
+        where: {
+            schoolId: session.schoolId,
+        },
         orderBy: {
             createdAt: "desc",
         },

@@ -10,7 +10,7 @@ const NotificationsPage = async () => {
         redirect("/login");
     }
 
-    const notifications = await getAllNotifications(session.id, session.role);
+    const notifications = await getAllNotifications(session.userId, session.role);
 
     return (
         <div className="flex-1 p-4 flex flex-col gap-4">
@@ -18,7 +18,7 @@ const NotificationsPage = async () => {
                 <h1 className="text-xl font-semibold mb-4">Notifications</h1>
                 <NotificationsList
                     notifications={notifications}
-                    userId={session.id}
+                    userId={session.userId}
                     userRole={session.role}
                 />
             </div>

@@ -2,7 +2,9 @@ import Announcements from "@/components/Announcements";
 import AttendanceChartContainer from "@/components/AttendanceChartContainer";
 import CountChartContainer from "@/components/CountChartContainer";
 import EventCalendarContainer from "@/components/EventCalendarContainer";
-import FinanceChart from "@/components/FinanceChart";
+import FinanceChartContainer from "@/components/FinanceChartContainer";
+import PerformanceChartContainer from "@/components/PerformanceChartContainer";
+import TeacherWorkloadChartContainer from "@/components/TeacherWorkloadChartContainer";
 import UserCard from "@/components/UserCard";
 
 const AdminPage = ({
@@ -32,14 +34,22 @@ const AdminPage = ({
             <AttendanceChartContainer />
           </div>
         </div>
-        {/* BOTTOM CHART */}
-        <div className="w-full h-[500px]">
-          <FinanceChart />
+        {/* BOTTOM CHARTS */}
+        <div className="flex gap-4 flex-col lg:flex-row h-[500px]">
+          <div className="w-full lg:w-1/3 h-full">
+            <FinanceChartContainer />
+          </div>
+          <div className="w-full lg:w-1/3 h-full">
+            <PerformanceChartContainer />
+          </div>
+          <div className="w-full lg:w-1/3 h-full">
+            <TeacherWorkloadChartContainer />
+          </div>
         </div>
       </div>
       {/* RIGHT */}
       <div className="w-full lg:w-1/3 flex flex-col gap-8">
-        <EventCalendarContainer searchParams={searchParams}/>
+        <EventCalendarContainer searchParams={searchParams} />
         <Announcements />
       </div>
     </div>

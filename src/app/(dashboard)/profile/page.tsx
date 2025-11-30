@@ -16,27 +16,34 @@ const ProfilePage = async () => {
     let userData: any = null;
 
     // Fetch user data based on role
-    switch (session.role) {
-        case "admin":
-            userData = await prisma.admin.findUnique({
-                where: { id: session.id },
-            });
-            break;
-        case "teacher":
-            userData = await prisma.teacher.findUnique({
-                where: { id: session.id },
-            });
-            break;
-        case "student":
-            userData = await prisma.student.findUnique({
-                where: { id: session.id },
-            });
-            break;
-        case "parent":
-            userData = await prisma.parent.findUnique({
-                where: { id: session.id },
-            });
-            break;
+    // Fetch user data based on role
+    if (session.userType === "manager") {
+        userData = await prisma.schoolManager.findUnique({
+            where: { id: session.userId },
+        });
+    } else {
+        switch (session.role) {
+            case "admin":
+                userData = await prisma.admin.findUnique({
+                    where: { id: session.userId },
+                });
+                break;
+            case "teacher":
+                userData = await prisma.teacher.findUnique({
+                    where: { id: session.userId },
+                });
+                break;
+            case "student":
+                userData = await prisma.student.findUnique({
+                    where: { id: session.userId },
+                });
+                break;
+            case "parent":
+                userData = await prisma.parent.findUnique({
+                    where: { id: session.userId },
+                });
+                break;
+        }
     }
 
     if (!userData) {
@@ -61,9 +68,11 @@ const ProfilePage = async () => {
                             />
                             <div>
                                 <h2 className="text-lg font-medium">
-                                    {session.role === "admin"
-                                        ? userData.username
-                                        : `${userData.name} ${userData.surname}`}
+                                    {session.userType === "manager"
+                                        ? userData.name
+                                        : session.role === "admin"
+                                            ? userData.username
+                                            : `${userData.name} ${userData.surname}`}
                                 </h2>
                                 <p className="text-sm text-gray-500 capitalize">{session.role}</p>
                             </div>
@@ -90,9 +99,11 @@ const ProfilePage = async () => {
                     <div className="flex flex-col gap-2 text-sm">
                         <div className="flex justify-between">
                             <span className="text-gray-500">Username:</span>
-                            <span className="font-medium">{userData.username}</span>
+                            <span className="font-medium">
+                                {session.userType === "manager" ? userData.email : userData.username}
+                            </span>
                         </div>
-                        {userData.email && (
+                        {(userData.email || session.userType === "manager") && (
                             <div className="flex justify-between">
                                 <span className="text-gray-500">Email:</span>
                                 <span className="font-medium">{userData.email}</span>

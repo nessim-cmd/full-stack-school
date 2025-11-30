@@ -1,10 +1,14 @@
 import prisma from "@/lib/prisma";
 
+import { getSchoolId } from "@/lib/authUser";
+
 const EventList = async ({ dateParam }: { dateParam: string | undefined }) => {
+  const schoolId = await getSchoolId();
   const date = dateParam ? new Date(dateParam) : new Date();
 
   const data = await prisma.event.findMany({
     where: {
+      schoolId,
       startTime: {
         gte: new Date(date.setHours(0, 0, 0, 0)),
         lte: new Date(date.setHours(23, 59, 59, 999)),

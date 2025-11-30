@@ -21,7 +21,7 @@ const ResourceListPage = async ({
 }) => {
     const session = await getSessionUser();
     const role = session?.role;
-    const currentUserId = session?.id;
+    const currentUserId = session?.userId;
 
     const columns = [
         {
@@ -99,7 +99,9 @@ const ResourceListPage = async ({
 
     // URL PARAMS CONDITION
 
-    const query: Prisma.ResourceWhereInput = {};
+    const query: Prisma.ResourceWhereInput = {
+        schoolId: session!.schoolId,
+    };
 
     if (queryParams) {
         for (const [key, value] of Object.entries(queryParams)) {

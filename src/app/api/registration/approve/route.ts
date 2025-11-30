@@ -45,9 +45,12 @@ export async function POST(req: NextRequest) {
             );
         }
 
-        // Check if grade exists
-        const gradeExists = await prisma.grade.findUnique({
-            where: { level: application.gradeId },
+        // Check if grade exists for this school
+        const gradeExists = await prisma.grade.findFirst({
+            where: {
+                level: application.gradeId,
+                schoolId: application.schoolId,
+            },
         });
 
         if (!gradeExists) {
@@ -57,10 +60,11 @@ export async function POST(req: NextRequest) {
             );
         }
 
-        // Find a class for this grade with available capacity
+        // Find a class for this grade with available capacity in this school
         const availableClass = await prisma.class.findFirst({
             where: {
-                gradeId: application.gradeId,
+                gradeId: gradeExists.id,
+                schoolId: application.schoolId,
             },
             include: {
                 _count: {
@@ -109,6 +113,7 @@ export async function POST(req: NextRequest) {
                 email: application.parentEmail,
                 phone: application.parentPhone,
                 address: application.parentAddress,
+                schoolId: application.schoolId,
             },
         });
 
@@ -127,9 +132,10 @@ export async function POST(req: NextRequest) {
                 bloodType: application.studentBloodType,
                 sex: application.studentSex,
                 birthday: application.studentBirthday,
-                gradeId: application.gradeId,
+                gradeId: gradeExists.id,
                 classId: availableClass.id,
                 parentId: parentId,
+                schoolId: application.schoolId,
             },
         });
 

@@ -91,7 +91,9 @@ const LessonListPage = async ({
 
   // URL PARAMS CONDITION
 
-  const query: Prisma.LessonWhereInput = {};
+  const query: Prisma.LessonWhereInput = {
+    schoolId: session!.schoolId,
+  };
 
   if (queryParams) {
     for (const [key, value] of Object.entries(queryParams)) {

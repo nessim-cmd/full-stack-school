@@ -11,7 +11,15 @@ const AdminsPage = async () => {
         redirect("/login");
     }
 
+    // Get current school ID from session/context
+    // Since this is a server component, we can get it from the session if available, 
+    // or we might need to rely on the middleware setting a header, but for now let's use the user's schoolId
+    // Assuming the logged-in admin can only see admins from their own school.
+
     const admins = await prisma.admin.findMany({
+        where: {
+            schoolId: session.schoolId
+        },
         orderBy: {
             username: "asc",
         },

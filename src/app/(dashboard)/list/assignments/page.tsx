@@ -24,7 +24,7 @@ const AssignmentListPage = async ({
 }) => {
   const session = await getSessionUser();
   const role = session?.role;
-  const currentUserId = session?.id;
+  const currentUserId = session?.userId;
 
 
   const columns = [
@@ -103,7 +103,9 @@ const AssignmentListPage = async ({
 
   // URL PARAMS CONDITION
 
-  const query: Prisma.AssignmentWhereInput = {};
+  const query: Prisma.AssignmentWhereInput = {
+    schoolId: session!.schoolId,
+  };
 
   query.lesson = {};
 

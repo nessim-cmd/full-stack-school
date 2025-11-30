@@ -1,17 +1,51 @@
 // src/app/login/page.tsx
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
+interface School {
+    id: string;
+    name: string;
+    slug: string;
+}
+
 export default function LoginPage() {
     const router = useRouter();
-    const [username, setUsername] = useState("");
+    const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [error, setError] = useState("");
     const [loading, setLoading] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
+
+    // School selection state
+    const [requiresSchoolSelection, setRequiresSchoolSelection] = useState(false);
+    const [managerId, setManagerId] = useState("");
+    const [schools, setSchools] = useState<School[]>([]);
+    const [selectedSchool, setSelectedSchool] = useState("");
+    const [checkingDomain, setCheckingDomain] = useState(true);
+
+    useEffect(() => {
+        const hostname = window.location.hostname;
+        let isRoot = false;
+
+        if (hostname === 'localhost') {
+            isRoot = true;
+        } else if (!hostname.endsWith('localhost')) {
+            // Production logic
+            const parts = hostname.split('.');
+            if (parts.length === 2) isRoot = true; // domain.com
+            if (parts.length === 3 && parts[0] === 'www') isRoot = true; // www.domain.com
+        }
+
+        if (isRoot) {
+            // Redirect root login to SaaS manager login
+            router.replace('/saas/manager-login');
+        } else {
+            setCheckingDomain(false);
+        }
+    }, [router]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -24,16 +58,66 @@ export default function LoginPage() {
                 headers: {
                     "Content-Type": "application/json",
                 },
-                body: JSON.stringify({ username, password }),
+                body: JSON.stringify({ email, password }),
             });
 
+            const data = await res.json();
+
             if (res.ok) {
-                const data = await res.json();
-                router.refresh();
-                router.push(`/${data.role}`);
+                if (data.requiresSchoolSelection) {
+                    // Manager has multiple schools
+                    setRequiresSchoolSelection(true);
+                    setManagerId(data.managerId);
+                    setSchools(data.schools);
+                } else {
+                    // Single school or regular user
+                    if (data.schoolSlug) {
+                        const hostname = window.location.hostname;
+                        let targetHost = '';
+
+                        // Handle localhost specifically
+                        if (hostname.endsWith('localhost')) {
+                            // Localhost environment
+                            // If current is just "localhost", target is "slug.localhost"
+                            // If current is "slug.localhost", target is "slug.localhost"
+                            // If current is "wrong.localhost", target is "slug.localhost"
+                            targetHost = `${data.schoolSlug}.localhost`;
+                        } else {
+                            // Production environment
+                            const parts = hostname.split('.');
+                            let rootDomain = hostname;
+
+                            // Simple heuristic: if www, strip it. 
+                            if (parts[0] === 'www') {
+                                parts.shift();
+                            }
+
+                            // If >= 3 parts (sub.domain.com), take last 2 as root
+                            // If 2 parts (domain.com), use as is
+                            if (parts.length >= 3) {
+                                rootDomain = parts.slice(-2).join('.');
+                            } else {
+                                rootDomain = parts.join('.');
+                            }
+
+                            targetHost = `${data.schoolSlug}.${rootDomain}`;
+                        }
+
+                        // Only redirect if we are not already on the target host
+                        if (hostname !== targetHost) {
+                            const protocol = window.location.protocol;
+                            const port = window.location.port ? `:${window.location.port}` : '';
+
+                            window.location.href = `${protocol}//${targetHost}${port}/${data.role}`;
+                            return;
+                        }
+                    }
+
+                    router.refresh();
+                    router.push(`/${data.role}`);
+                }
             } else {
-                const data = await res.json();
-                setError(data.message || "Invalid username or password");
+                setError(data.message || "Invalid email or password");
             }
         } catch (err) {
             setError("Network error. Please try again.");
@@ -42,6 +126,152 @@ export default function LoginPage() {
         }
     };
 
+    const handleSchoolSelection = async () => {
+        if (!selectedSchool) {
+            setError("Please select a school");
+            return;
+        }
+
+        setLoading(true);
+        setError("");
+
+        try {
+            const res = await fetch("/api/auth/select-school", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ managerId, schoolId: selectedSchool }),
+            });
+
+            const data = await res.json();
+
+            if (res.ok) {
+                router.refresh();
+                router.push(`/${data.role}`);
+            } else {
+                setError(data.message || "Failed to select school");
+            }
+        } catch (err) {
+            setError("Network error. Please try again.");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // School Selection View
+    if (requiresSchoolSelection) {
+        return (
+            <div className="min-h-screen flex items-center justify-center relative overflow-hidden">
+                {/* Animated Gradient Background */}
+                <div className="absolute inset-0 bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-500 animate-gradient-shift"></div>
+
+                {/* Floating orbs for depth */}
+                <div className="absolute top-20 left-20 w-72 h-72 bg-purple-400 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob"></div>
+                <div className="absolute top-40 right-20 w-72 h-72 bg-pink-400 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob animation-delay-2000"></div>
+
+                {/* Selection Card */}
+                <div className="relative z-10 w-full max-w-md px-6">
+                    <div className="backdrop-blur-xl bg-white/10 border border-white/20 rounded-3xl shadow-2xl p-10 animate-float">
+                        {/* Header */}
+                        <div className="text-center mb-8">
+                            <h1 className="text-3xl font-bold text-white mb-2 drop-shadow-lg">
+                                Select Your School
+                            </h1>
+                            <p className="text-white/80 text-sm">
+                                You manage multiple schools. Please select one to continue.
+                            </p>
+                        </div>
+
+                        {/* Error Message */}
+                        {error && (
+                            <div className="mb-6 bg-red-500/20 backdrop-blur-sm border border-red-400/30 text-white px-4 py-3 rounded-xl text-sm">
+                                {error}
+                            </div>
+                        )}
+
+                        {/* School List */}
+                        <div className="space-y-3 mb-6">
+                            {schools.map((school) => (
+                                <button
+                                    key={school.id}
+                                    onClick={() => setSelectedSchool(school.id)}
+                                    className={`w-full p-4 rounded-xl border-2 transition-all duration-300 text-left ${selectedSchool === school.id
+                                        ? "bg-white/20 border-white/60 shadow-lg"
+                                        : "bg-white/5 border-white/20 hover:bg-white/10"
+                                        }`}
+                                >
+                                    <div className="text-white font-semibold">{school.name}</div>
+                                    <div className="text-white/60 text-sm">{school.slug}</div>
+                                </button>
+                            ))}
+                        </div>
+
+                        {/* Continue Button */}
+                        <button
+                            onClick={handleSchoolSelection}
+                            disabled={loading || !selectedSchool}
+                            className="w-full py-4 bg-gradient-to-r from-purple-500 to-pink-500 text-white font-semibold rounded-xl shadow-lg hover:shadow-2xl hover:scale-[1.02] active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300"
+                        >
+                            {loading ? "Loading..." : "Continue"}
+                        </button>
+
+                        {/* Back Button */}
+                        <button
+                            onClick={() => {
+                                setRequiresSchoolSelection(false);
+                                setSchools([]);
+                                setSelectedSchool("");
+                                setPassword("");
+                            }}
+                            className="w-full mt-3 py-3 text-white/70 hover:text-white transition-colors text-sm"
+                        >
+                            ← Back to Login
+                        </button>
+                    </div>
+                </div>
+
+                <style jsx>{`
+                    @keyframes gradient-shift {
+                        0%, 100% { background-position: 0% 50%; }
+                        50% { background-position: 100% 50%; }
+                    }
+                    @keyframes blob {
+                        0%, 100% { transform: translate(0, 0) scale(1); }
+                        33% { transform: translate(30px, -50px) scale(1.1); }
+                        66% { transform: translate(-20px, 20px) scale(0.9); }
+                    }
+                    @keyframes float {
+                        0%, 100% { transform: translateY(0px); }
+                        50% { transform: translateY(-10px); }
+                    }
+                    .animate-gradient-shift {
+                        background-size: 200% 200%;
+                        animation: gradient-shift 15s ease infinite;
+                    }
+                    .animate-blob {
+                        animation: blob 10s infinite;
+                    }
+                    .animation-delay-2000 {
+                        animation-delay: 2s;
+                    }
+                    .animate-float {
+                        animation: float 6s ease-in-out infinite;
+                    }
+                `}</style>
+            </div>
+        );
+    }
+
+    if (checkingDomain) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-gray-50">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+            </div>
+        );
+    }
+
+    // Login View
     return (
         <div className="min-h-screen flex items-center justify-center relative overflow-hidden">
             {/* Animated Gradient Background */}
@@ -88,18 +318,18 @@ export default function LoginPage() {
 
                     {/* Form */}
                     <form onSubmit={handleSubmit} className="space-y-5">
-                        {/* Username Input */}
+                        {/* Email Input */}
                         <div className="relative group">
                             <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                                 <svg className="w-5 h-5 text-white/60 group-focus-within:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207" />
                                 </svg>
                             </div>
                             <input
                                 type="text"
-                                placeholder="Username"
-                                value={username}
-                                onChange={(e) => setUsername(e.target.value)}
+                                placeholder="Email or Username"
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
                                 required
                                 disabled={loading}
                                 className="w-full pl-12 pr-4 py-4 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-white/30 focus:border-transparent transition-all duration-300 disabled:opacity-50"
@@ -144,7 +374,7 @@ export default function LoginPage() {
                         {/* Submit Button */}
                         <button
                             type="submit"
-                            disabled={loading || !username || !password}
+                            disabled={loading || !email || !password}
                             className="w-full mt-6 py-4 bg-gradient-to-r from-purple-500 to-pink-500 text-white font-semibold rounded-xl shadow-lg hover:shadow-2xl hover:scale-[1.02] active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 transition-all duration-300 flex items-center justify-center gap-2"
                         >
                             {loading ? (

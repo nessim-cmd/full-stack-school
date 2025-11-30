@@ -62,7 +62,9 @@ const SubjectListPage = async ({
 
   // URL PARAMS CONDITION
 
-  const query: Prisma.SubjectWhereInput = {};
+  const query: Prisma.SubjectWhereInput = {
+    schoolId: session!.schoolId,
+  };
 
   if (queryParams) {
     for (const [key, value] of Object.entries(queryParams)) {

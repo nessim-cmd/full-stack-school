@@ -102,7 +102,9 @@ const StudentListPage = async ({
 
   // URL PARAMS CONDITION
 
-  const query: Prisma.StudentWhereInput = {};
+  const query: Prisma.StudentWhereInput = {
+    schoolId: session!.schoolId, // Filter by school
+  };
 
   if (queryParams) {
     for (const [key, value] of Object.entries(queryParams)) {

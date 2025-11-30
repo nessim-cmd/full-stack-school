@@ -108,7 +108,9 @@ const TeacherListPage = async ({
 
   // URL PARAMS CONDITION
 
-  const query: Prisma.TeacherWhereInput = {};
+  const query: Prisma.TeacherWhereInput = {
+    schoolId: session!.schoolId,
+  };
 
   if (queryParams) {
     for (const [key, value] of Object.entries(queryParams)) {

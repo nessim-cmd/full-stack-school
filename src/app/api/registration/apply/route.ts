@@ -20,6 +20,7 @@ export async function POST(req: NextRequest) {
             parentEmail,
             parentPhone,
             parentAddress,
+            schoolId,
         } = body;
 
         // Validate required fields
@@ -35,7 +36,8 @@ export async function POST(req: NextRequest) {
             !parentSurname ||
             !parentEmail ||
             !parentPhone ||
-            !parentAddress
+            !parentAddress ||
+            !schoolId
         ) {
             return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
         }
@@ -43,6 +45,7 @@ export async function POST(req: NextRequest) {
         // Check if parent email already exists in applications
         const existingApplication = await prisma.registrationRequest.findFirst({
             where: {
+                schoolId,
                 OR: [
                     { parentEmail },
                     { studentEmail: studentEmail || undefined },
@@ -74,6 +77,7 @@ export async function POST(req: NextRequest) {
                 parentEmail,
                 parentPhone,
                 parentAddress,
+                schoolId,
             },
         });
 

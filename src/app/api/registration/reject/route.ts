@@ -1,8 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
+import { getSessionUser, getSchoolId } from "@/lib/authUser";
 
 export async function POST(req: NextRequest) {
     try {
+        const session = await getSessionUser();
+        if (!session || session.role !== "admin") {
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        }
+        const schoolId = await getSchoolId();
+
         const { id } = await req.json();
 
         if (!id) {
@@ -10,8 +17,11 @@ export async function POST(req: NextRequest) {
         }
 
         // Get the application
-        const application = await prisma.registrationRequest.findUnique({
-            where: { id: parseInt(id) },
+        const application = await prisma.registrationRequest.findFirst({
+            where: {
+                id: parseInt(id),
+                schoolId,
+            },
         });
 
         if (!application) {

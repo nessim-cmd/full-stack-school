@@ -30,7 +30,7 @@ const ResultListPage = async ({
 
   const session = await getSessionUser();
   const role = session?.role;
-  const currentUserId = session?.id;
+  const currentUserId = session?.userId;
 
 
   const columns = [
@@ -106,7 +106,9 @@ const ResultListPage = async ({
 
   // URL PARAMS CONDITION
 
-  const query: Prisma.ResultWhereInput = {};
+  const query: Prisma.ResultWhereInput = {
+    schoolId: session!.schoolId,
+  };
 
   if (queryParams) {
     for (const [key, value] of Object.entries(queryParams)) {

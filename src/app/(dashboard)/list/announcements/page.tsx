@@ -18,7 +18,7 @@ const AnnouncementListPage = async ({
 
   const session = await getSessionUser();
   const role = session?.role;
-  const currentUserId = session?.id;
+  const currentUserId = session?.userId;
 
   const columns = [
     {
@@ -72,7 +72,9 @@ const AnnouncementListPage = async ({
 
   // URL PARAMS CONDITION
 
-  const query: Prisma.AnnouncementWhereInput = {};
+  const query: Prisma.AnnouncementWhereInput = {
+    schoolId: session!.schoolId,
+  };
 
   if (queryParams) {
     for (const [key, value] of Object.entries(queryParams)) {

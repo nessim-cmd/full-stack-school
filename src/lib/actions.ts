@@ -18,7 +18,7 @@ import prisma from "./prisma";
 import { hashPassword } from "./auth";
 import { randomUUID } from "crypto";
 import { sendCredentials } from "./mail";
-import { getSessionUser } from "./authUser";
+import { getSessionUser, getSchoolId } from "./authUser";
 
 type CurrentState = { success: boolean; error: boolean };
 
@@ -30,6 +30,7 @@ export const createParent = async (
     const password = await hashPassword(data.password || "");
     const id = randomUUID();
 
+    const schoolId = await getSchoolId();
     await prisma.parent.create({
       data: {
         id: id,
@@ -40,6 +41,7 @@ export const createParent = async (
         email: data.email || null,
         phone: data.phone,
         address: data.address,
+        schoolId: schoolId,
       },
     });
 
@@ -76,9 +78,11 @@ export const updateParent = async (
     return { success: false, error: true };
   }
   try {
-    await prisma.parent.update({
+    const schoolId = await getSchoolId();
+    await prisma.parent.updateMany({
       where: {
         id: data.id,
+        schoolId: schoolId,
       },
       data: {
         ...(data.password !== "" && { password: await hashPassword(data.password || "") }),
@@ -113,9 +117,11 @@ export const deleteParent = async (
 ) => {
   const id = data.get("id") as string;
   try {
-    await prisma.parent.delete({
+    const schoolId = await getSchoolId();
+    await prisma.parent.deleteMany({
       where: {
         id: id,
+        schoolId: schoolId,
       },
     });
 
@@ -139,12 +145,14 @@ export const createSubject = async (
   data: SubjectSchema
 ) => {
   try {
+    const schoolId = await getSchoolId();
     await prisma.subject.create({
       data: {
         name: data.name,
         teachers: {
           connect: data.teachers.map((teacherId) => ({ id: teacherId })),
         },
+        schoolId: schoolId,
       },
     });
 
@@ -161,16 +169,38 @@ export const updateSubject = async (
   data: SubjectSchema
 ) => {
   try {
-    await prisma.subject.update({
+    const schoolId = await getSchoolId();
+    await prisma.subject.updateMany({
       where: {
         id: data.id,
+        schoolId: schoolId,
       },
+      data: {
+        name: data.name,
+        // Relations cannot be updated with updateMany directly in the same way as update
+        // We might need to handle relations separately or use findFirst + update
+      },
+    });
+    // Since updateMany doesn't support relations, we should use findFirst then update
+    // But wait, 'teachers' is a relation. updateMany CANNOT update relations.
+    // So we MUST use findFirst to verify ownership, then update.
+
+    const subject = await prisma.subject.findFirst({
+      where: { id: data.id, schoolId: schoolId }
+    });
+
+    if (!subject) {
+      return { success: false, error: true, message: "Subject not found or access denied" };
+    }
+
+    await prisma.subject.update({
+      where: { id: data.id },
       data: {
         name: data.name,
         teachers: {
           set: data.teachers.map((teacherId) => ({ id: teacherId })),
         },
-      },
+      }
     });
 
     // revalidatePath("/list/subjects");
@@ -187,9 +217,11 @@ export const deleteSubject = async (
 ) => {
   const id = data.get("id") as string;
   try {
-    await prisma.subject.delete({
+    const schoolId = await getSchoolId();
+    await prisma.subject.deleteMany({
       where: {
         id: parseInt(id),
+        schoolId: schoolId,
       },
     });
 
@@ -213,8 +245,9 @@ export const createClass = async (
   data: ClassSchema
 ) => {
   try {
+    const schoolId = await getSchoolId();
     await prisma.class.create({
-      data,
+      data: { ...data, schoolId },
     });
 
     // revalidatePath("/list/classes");
@@ -230,9 +263,11 @@ export const updateClass = async (
   data: ClassSchema
 ) => {
   try {
-    await prisma.class.update({
+    const schoolId = await getSchoolId();
+    await prisma.class.updateMany({
       where: {
         id: data.id,
+        schoolId: schoolId,
       },
       data,
     });
@@ -251,9 +286,11 @@ export const deleteClass = async (
 ) => {
   const id = data.get("id") as string;
   try {
-    await prisma.class.delete({
+    const schoolId = await getSchoolId();
+    await prisma.class.deleteMany({
       where: {
         id: parseInt(id),
+        schoolId: schoolId,
       },
     });
 
@@ -280,6 +317,7 @@ export const createTeacher = async (
     const password = await hashPassword(data.password || "");
     const id = randomUUID();
 
+    const schoolId = await getSchoolId();
     await prisma.teacher.create({
       data: {
         id: id,
@@ -299,6 +337,7 @@ export const createTeacher = async (
             id: parseInt(subjectId),
           })),
         },
+        schoolId: schoolId,
       },
     });
 
@@ -335,6 +374,16 @@ export const updateTeacher = async (
     return { success: false, error: true };
   }
   try {
+    const schoolId = await getSchoolId();
+    // Check ownership first
+    const teacher = await prisma.teacher.findFirst({
+      where: { id: data.id, schoolId: schoolId }
+    });
+
+    if (!teacher) {
+      return { success: false, error: true, message: "Teacher not found or access denied" };
+    }
+
     await prisma.teacher.update({
       where: {
         id: data.id,
@@ -380,9 +429,11 @@ export const deleteTeacher = async (
 ) => {
   const id = data.get("id") as string;
   try {
-    await prisma.teacher.delete({
+    const schoolId = await getSchoolId();
+    await prisma.teacher.deleteMany({
       where: {
         id: id,
+        schoolId: schoolId,
       },
     });
 
@@ -419,6 +470,12 @@ export const createStudent = async (
     const password = await hashPassword(data.password || "");
     const id = randomUUID();
 
+    const schoolId = await getSchoolId();
+    // Verify class belongs to school
+    if (classItem && classItem.schoolId !== schoolId) {
+      return { success: false, error: true, message: "Invalid class for this school" };
+    }
+
     await prisma.student.create({
       data: {
         id: id,
@@ -436,6 +493,7 @@ export const createStudent = async (
         gradeId: data.gradeId,
         classId: data.classId,
         parentId: data.parentId,
+        schoolId: schoolId,
       },
     });
 
@@ -479,9 +537,11 @@ export const updateStudent = async (
     return { success: false, error: true };
   }
   try {
-    await prisma.student.update({
+    const schoolId = await getSchoolId();
+    await prisma.student.updateMany({
       where: {
         id: data.id,
+        schoolId: schoolId,
       },
       data: {
         ...(data.password !== "" && { password: await hashPassword(data.password || "") }),
@@ -529,9 +589,11 @@ export const deleteStudent = async (
 ) => {
   const id = data.get("id") as string;
   try {
-    await prisma.student.delete({
+    const schoolId = await getSchoolId();
+    await prisma.student.deleteMany({
       where: {
         id: id,
+        schoolId: schoolId,
       },
     });
 
@@ -571,12 +633,20 @@ export const createExam = async (
     //   }
     // }
 
+    const schoolId = await getSchoolId();
+
+    const lesson = await prisma.lesson.findFirst({ where: { id: data.lessonId, schoolId } });
+    if (!lesson) {
+      return { success: false, error: true, message: "Invalid lesson." };
+    }
+
     await prisma.exam.create({
       data: {
         title: data.title,
         startTime: data.startTime,
         endTime: data.endTime,
         lessonId: data.lessonId,
+        schoolId: schoolId,
       },
     });
 
@@ -609,9 +679,11 @@ export const updateExam = async (
     //   }
     // }
 
-    await prisma.exam.update({
+    const schoolId = await getSchoolId();
+    await prisma.exam.updateMany({
       where: {
         id: data.id,
+        schoolId: schoolId,
       },
       data: {
         title: data.title,
@@ -639,9 +711,11 @@ export const deleteExam = async (
   // const role = (sessionClaims?.metadata as { role?: string })?.role;
 
   try {
-    await prisma.exam.delete({
+    const schoolId = await getSchoolId();
+    await prisma.exam.deleteMany({
       where: {
         id: parseInt(id),
+        schoolId: schoolId,
         // ...(role === "teacher" ? { lesson: { teacherId: userId! } } : {}),
       },
     });
@@ -668,6 +742,19 @@ export const createLesson = async (
   data: LessonSchema
 ) => {
   try {
+    const schoolId = await getSchoolId();
+
+    // Validate relations belong to school
+    const [subject, classItem, teacher] = await Promise.all([
+      prisma.subject.findFirst({ where: { id: data.subjectId, schoolId } }),
+      prisma.class.findFirst({ where: { id: data.classId, schoolId } }),
+      prisma.teacher.findFirst({ where: { id: data.teacherId, schoolId } }),
+    ]);
+
+    if (!subject || !classItem || !teacher) {
+      return { success: false, error: true, message: "Invalid subject, class, or teacher." };
+    }
+
     await prisma.lesson.create({
       data: {
         name: data.name,
@@ -677,6 +764,7 @@ export const createLesson = async (
         subjectId: data.subjectId,
         classId: data.classId,
         teacherId: data.teacherId,
+        schoolId: schoolId,
       },
     });
 
@@ -693,9 +781,11 @@ export const updateLesson = async (
   data: LessonSchema
 ) => {
   try {
-    await prisma.lesson.update({
+    const schoolId = await getSchoolId();
+    await prisma.lesson.updateMany({
       where: {
         id: data.id,
+        schoolId: schoolId,
       },
       data: {
         name: data.name,
@@ -722,9 +812,11 @@ export const deleteLesson = async (
 ) => {
   const id = data.get("id") as string;
   try {
-    await prisma.lesson.delete({
+    const schoolId = await getSchoolId();
+    await prisma.lesson.deleteMany({
       where: {
         id: parseInt(id),
+        schoolId: schoolId,
       },
     });
 
@@ -750,30 +842,40 @@ export const createEvent = async (
   data: EventSchema
 ) => {
   try {
+    const schoolId = await getSchoolId();
+
+    if (data.classId) {
+      const classItem = await prisma.class.findFirst({ where: { id: data.classId, schoolId } });
+      if (!classItem) {
+        return { success: false, error: true, message: "Invalid class." };
+      }
+    }
+
     const event = await prisma.event.create({
       data: {
         title: data.title,
         description: data.description,
         startTime: data.startTime,
         endTime: data.endTime,
-        classId: data.classId || null,
+        classId: data.classId,
+        schoolId: schoolId,
       },
     });
 
-    // Add notification job to queue (non-blocking, instant return)
-    console.log("[Create Event] Adding notification job to queue for event:", event.title);
-    const { addEventNotificationJob } = await import("./queue/notificationQueue");
+    // Send notifications
+    console.log("[Create Event] Sending notifications for event:", event.title);
+    const { notifyEventCreation } = await import("./notification-actions");
 
-    // Fire and forget - don't wait for job to complete
-    addEventNotificationJob({
-      eventTitle: event.title,
-      eventDescription: event.description,
-      startTime: event.startTime,
-      endTime: event.endTime,
-      classId: event.classId,
-    }).catch((error) => {
-      console.error("[Create Event] Failed to add notification job:", error);
-      // Don't fail the event creation if queue fails
+    // Fire and forget - don't wait for notifications to complete
+    notifyEventCreation(
+      event.title,
+      event.description,
+      event.startTime,
+      event.endTime,
+      event.classId,
+      schoolId
+    ).catch((error) => {
+      console.error("[Create Event] Failed to send notifications:", error);
     });
 
     revalidatePath("/list/events");
@@ -789,9 +891,11 @@ export const updateEvent = async (
   data: EventSchema
 ) => {
   try {
-    await prisma.event.update({
+    const schoolId = await getSchoolId();
+    await prisma.event.updateMany({
       where: {
         id: data.id,
+        schoolId: schoolId,
       },
       data: {
         title: data.title,
@@ -816,9 +920,11 @@ export const deleteEvent = async (
 ) => {
   const id = data.get("id") as string;
   try {
-    await prisma.event.delete({
+    const schoolId = await getSchoolId();
+    await prisma.event.deleteMany({
       where: {
         id: parseInt(id),
+        schoolId: schoolId,
       },
     });
 
@@ -838,12 +944,24 @@ export const createResource = async (
   data: ResourceSchema
 ) => {
   try {
+    const schoolId = await getSchoolId();
+
+    const [lesson, assignment] = await Promise.all([
+      data.lessonId ? prisma.lesson.findFirst({ where: { id: data.lessonId, schoolId } }) : null,
+      data.assignmentId ? prisma.assignment.findFirst({ where: { id: data.assignmentId, schoolId } }) : null,
+    ]);
+
+    if ((data.lessonId && !lesson) || (data.assignmentId && !assignment)) {
+      return { success: false, error: true, message: "Invalid lesson or assignment." };
+    }
+
     await prisma.resource.create({
       data: {
         title: data.title,
         url: data.url,
         lessonId: data.lessonId || null,
         assignmentId: data.assignmentId || null,
+        schoolId: schoolId,
       },
     });
 
@@ -864,9 +982,11 @@ export const deleteResource = async (
 ) => {
   const id = data.get("id") as string;
   try {
-    await prisma.resource.delete({
+    const schoolId = await getSchoolId();
+    await prisma.resource.deleteMany({
       where: {
         id: parseInt(id),
+        schoolId: schoolId,
       },
     });
 
@@ -889,12 +1009,25 @@ export const createResult = async (
   data: ResultSchema
 ) => {
   try {
+    const schoolId = await getSchoolId();
+
+    const [exam, assignment, student] = await Promise.all([
+      data.examId ? prisma.exam.findFirst({ where: { id: data.examId, schoolId } }) : null,
+      data.assignmentId ? prisma.assignment.findFirst({ where: { id: data.assignmentId, schoolId } }) : null,
+      prisma.student.findFirst({ where: { id: data.studentId, schoolId } }),
+    ]);
+
+    if ((data.examId && !exam) || (data.assignmentId && !assignment) || !student) {
+      return { success: false, error: true, message: "Invalid exam, assignment, or student." };
+    }
+
     await prisma.result.create({
       data: {
         score: data.score,
-        examId: data.examId || null,
-        assignmentId: data.assignmentId || null,
+        examId: data.examId,
+        assignmentId: data.assignmentId,
         studentId: data.studentId,
+        schoolId: schoolId,
       },
     });
 
@@ -911,9 +1044,11 @@ export const updateResult = async (
   data: ResultSchema
 ) => {
   try {
-    await prisma.result.update({
+    const schoolId = await getSchoolId();
+    await prisma.result.updateMany({
       where: {
         id: data.id,
+        schoolId: schoolId,
       },
       data: {
         score: data.score,
@@ -937,9 +1072,11 @@ export const deleteResult = async (
 ) => {
   const id = data.get("id") as string;
   try {
-    await prisma.result.delete({
+    const schoolId = await getSchoolId();
+    await prisma.result.deleteMany({
       where: {
         id: parseInt(id),
+        schoolId: schoolId,
       },
     });
 
@@ -961,7 +1098,7 @@ export const createMessage = async (
       return { success: false, error: true, message: "Unauthorized!" };
     }
 
-    const senderId = session.id;
+    const senderId = session.userId;
     const senderRole = session.role;
 
     // Fetch sender name
@@ -980,6 +1117,7 @@ export const createMessage = async (
       senderName = parent ? `${parent.name} ${parent.surname}` : "Parent";
     }
 
+    const schoolId = await getSchoolId();
     // Create Message with Recipients
     const message = await prisma.message.create({
       data: {
@@ -988,6 +1126,7 @@ export const createMessage = async (
         senderId,
         senderRole,
         senderName,
+        schoolId: schoolId,
         recipients: {
           create: data.recipients.map(recipient => ({
             recipientId: recipient.id,
@@ -1029,9 +1168,11 @@ export const deleteMessage = async (
 ) => {
   const id = data.get("id") as string;
   try {
-    await prisma.message.delete({
+    const schoolId = await getSchoolId();
+    await prisma.message.deleteMany({
       where: {
         id: parseInt(id),
+        schoolId: schoolId,
       },
     });
 
@@ -1050,12 +1191,20 @@ export const createAssignment = async (
   data: any // Using any temporarily to avoid schema import issues if not synced
 ) => {
   try {
+    const schoolId = await getSchoolId();
+
+    const lesson = await prisma.lesson.findFirst({ where: { id: data.lessonId, schoolId } });
+    if (!lesson) {
+      return { success: false, error: true, message: "Invalid lesson." };
+    }
+
     await prisma.assignment.create({
       data: {
         title: data.title,
         startDate: data.startDate,
         dueDate: data.dueDate,
         lessonId: data.lessonId,
+        schoolId: schoolId,
       },
     });
 
@@ -1072,9 +1221,11 @@ export const updateAssignment = async (
   data: any // Using any temporarily
 ) => {
   try {
-    await prisma.assignment.update({
+    const schoolId = await getSchoolId();
+    await prisma.assignment.updateMany({
       where: {
         id: data.id,
+        schoolId: schoolId,
       },
       data: {
         title: data.title,
@@ -1089,5 +1240,112 @@ export const updateAssignment = async (
   } catch (err) {
     console.log(err);
     return { success: false, error: true };
+  }
+};
+
+// ADMIN ACTIONS
+
+export const createAdmin = async (
+  currentState: CurrentState,
+  data: any // Using any temporarily, should define AdminSchema
+) => {
+  try {
+    const password = await hashPassword(data.password || "");
+    const id = randomUUID();
+    const schoolId = await getSchoolId();
+
+    await prisma.admin.create({
+      data: {
+        id: id,
+        username: data.username,
+        password: password,
+        school: {
+          connect: { id: schoolId }
+        }
+      },
+    });
+
+    // revalidatePath("/admin/admins");
+    return { success: true, error: false };
+  } catch (err: any) {
+    console.log(err);
+    if (err.code === "P2002") {
+      return {
+        success: false,
+        error: true,
+        message: "Username already exists!",
+      };
+    }
+    return { success: false, error: true, message: "Something went wrong!" };
+  }
+};
+
+export const updateAdmin = async (
+  currentState: CurrentState,
+  data: any
+) => {
+  try {
+    const schoolId = await getSchoolId();
+
+    // Check ownership
+    const admin = await prisma.admin.findFirst({
+      where: { id: data.id, schoolId: schoolId }
+    });
+
+    if (!admin) {
+      return { success: false, error: true, message: "Admin not found or access denied" };
+    }
+
+    await prisma.admin.update({
+      where: {
+        id: data.id,
+      },
+      data: {
+        username: data.username,
+        ...(data.password !== "" && { password: await hashPassword(data.password || "") }),
+      },
+    });
+
+    // revalidatePath("/admin/admins");
+    return { success: true, error: false };
+  } catch (err: any) {
+    console.log(err);
+    if (err.code === "P2002") {
+      return {
+        success: false,
+        error: true,
+        message: "Username already exists!",
+      };
+    }
+    return { success: false, error: true, message: "Something went wrong!" };
+  }
+};
+
+export const deleteAdmin = async (
+  currentState: CurrentState,
+  data: FormData
+) => {
+  const id = data.get("id") as string;
+  try {
+    const schoolId = await getSchoolId();
+
+    // Prevent deleting yourself
+    const session = await getSessionUser();
+    if (session?.userId === id) {
+      return { success: false, error: true, message: "You cannot delete your own account!" };
+    }
+
+    await prisma.admin.deleteMany({
+      where: {
+        id: id,
+        schoolId: schoolId,
+      },
+    });
+
+    // revalidatePath("/admin/admins");
+    return { success: true, error: false };
+  } catch (err) {
+    console.log(err);
+    return { success: false, error: true, message: "Something went wrong!" };
   }
 };
