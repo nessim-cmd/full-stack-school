@@ -16,7 +16,8 @@ async function getSiteSettings(schoolSlug?: string) {
     }
 
     if (!school) {
-        throw new Error("No school found. Please set up a school first.");
+        // Return null instead of throwing error - we'll handle redirect in the page component
+        return null;
     }
 
     let settings = await prisma.siteSettings.findUnique({
@@ -37,6 +38,7 @@ async function getSiteSettings(schoolSlug?: string) {
 }
 
 import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 
 // ... imports ...
 
@@ -51,7 +53,14 @@ export default async function HomePage({
     // Prioritize subdomain, then query param
     const schoolSlug = subdomainSlug || searchParams.school;
 
-    const { settings, school } = await getSiteSettings(schoolSlug);
+    const result = await getSiteSettings(schoolSlug);
+    
+    // If no school found, redirect to manager dashboard
+    if (!result) {
+        redirect('/saas/manager-login');
+    }
+    
+    const { settings, school } = result;
 
     // Parse JSON fields
     const programs = JSON.parse(settings.programs);
