@@ -55,6 +55,19 @@ export async function middleware(req: NextRequest) {
   console.log("[Middleware] Path:", url.pathname);
   console.log("[Middleware] Token exists:", !!token);
 
+  // Security: Remove sensitive data from URL (email, password in query params)
+  const hasSensitiveParams = url.searchParams.has('email') || 
+                            url.searchParams.has('password') ||
+                            url.searchParams.has('token');
+  if (hasSensitiveParams) {
+    const cleanUrl = new URL(url);
+    cleanUrl.searchParams.delete('email');
+    cleanUrl.searchParams.delete('password');
+    cleanUrl.searchParams.delete('token');
+    console.log("[Middleware] Removing sensitive params from URL");
+    return NextResponse.redirect(cleanUrl);
+  }
+
   // If subdomain exists, store it in a header for the app to use
   const response = NextResponse.next();
   if (subdomain) {
@@ -63,7 +76,7 @@ export async function middleware(req: NextRequest) {
   }
 
   // Public routes that don't require authentication
-  const publicRoutes = ["/", "/apply"];
+  const publicRoutes = ["/", "/apply", "/access-denied"];
   // Also allow all /saas routes, /api/auth routes, and /super-admin/login to be public
   const isSaasRoute = url.pathname.startsWith("/saas");
   const isAuthRoute = url.pathname.startsWith("/api/auth");
@@ -119,6 +132,9 @@ export async function middleware(req: NextRequest) {
 
   const role = (payload as any).role as string | undefined;
   console.log("[Middleware] User role:", role);
+
+  // Note: Service-based access control is handled client-side via ServiceAccessGuard
+  // because Prisma doesn't work in Edge runtime (middleware)
 
   // Find the matcher for the current pathname
   const matcherEntry = Object.entries(routeAccessMap).find(([pattern]) =>

@@ -62,11 +62,20 @@ const NotificationBell = ({
 
     const unreadCount = notifications.filter((n) => !n.read).length;
 
-    const handleMarkAsRead = async (notificationId: number) => {
-        await markNotificationAsRead(notificationId);
+    const handleNotificationClick = async (notification: Notification) => {
+        await markNotificationAsRead(notification.id);
         setNotifications((prev) =>
-            prev.map((n) => (n.id === notificationId ? { ...n, read: true } : n))
+            prev.map((n) => (n.id === notification.id ? { ...n, read: true } : n))
         );
+
+        // Redirect based on notification type
+        if (notification.type === "message_received") {
+            router.push("/list/messages");
+        } else if (notification.type === "ticket_reply" || notification.type === "ticket_created") {
+            router.push("/admin/support");
+        }
+
+        setIsOpen(false);
         router.refresh();
     };
 
@@ -86,6 +95,8 @@ const NotificationBell = ({
                 return "💬";
             case "ticket_created":
                 return "🎫";
+            case "message_received":
+                return "✉️";
             default:
                 return "📢";
         }
@@ -130,7 +141,7 @@ const NotificationBell = ({
                                     key={notification.id}
                                     className={`p-4 border-b hover:bg-gray-50 cursor-pointer ${!notification.read ? "bg-blue-50" : ""
                                         }`}
-                                    onClick={() => handleMarkAsRead(notification.id)}
+                                    onClick={() => handleNotificationClick(notification)}
                                 >
                                     <div className="flex items-start gap-2">
                                         <span className="text-xl">

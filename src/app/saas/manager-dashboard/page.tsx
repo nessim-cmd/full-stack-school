@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import SchoolServicesModal from "@/components/SchoolServicesModal";
 
 interface School {
     id: string;
@@ -11,6 +12,7 @@ interface School {
     plan: string;
     subscriptionStatus: string;
     trialEndsAt: string;
+    enabledServices: string;
 }
 
 export default function ManagerDashboard() {
@@ -18,6 +20,8 @@ export default function ManagerDashboard() {
     const [loading, setLoading] = useState(true);
     const [manager, setManager] = useState<any>(null);
     const [schools, setSchools] = useState<School[]>([]);
+    const [selectedSchool, setSelectedSchool] = useState<School | null>(null);
+    const [isServicesModalOpen, setIsServicesModalOpen] = useState(false);
 
     useEffect(() => {
         fetchManagerData();
@@ -44,6 +48,29 @@ export default function ManagerDashboard() {
     const handleLogout = async () => {
         await fetch("/api/saas/manager-logout", { method: "POST" });
         router.push("/saas/manager-login");
+    };
+
+    const openServicesModal = (school: School) => {
+        setSelectedSchool(school);
+        setIsServicesModalOpen(true);
+    };
+
+    const hasServicesConfigured = (school: School): boolean => {
+        try {
+            const services = JSON.parse(school.enabledServices || "[]");
+            return Array.isArray(services) && services.length > 0;
+        } catch {
+            return false;
+        }
+    };
+
+    const getDashboardLink = (school: School): string => {
+        // If services not configured, go to configuration page
+        if (!hasServicesConfigured(school)) {
+            return `/admin/school/${school.id}/configure-services`;
+        }
+        // Otherwise, go to dashboard
+        return `http://${school.slug}.localhost:3000`;
     };
 
     if (loading) {
@@ -175,31 +202,46 @@ export default function ManagerDashboard() {
                                             </div>
                                         )}
 
-                                        <div className="flex flex-col space-y-2">
+                                        <div className="space-y-2">
                                             <a
                                                 href={`http://${school.slug}.localhost:3000`}
                                                 target="_blank"
                                                 rel="noopener noreferrer"
-                                                className="w-full py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg text-center font-semibold hover:shadow-lg transition-all duration-300 text-sm"
+                                                className="block py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg text-center font-semibold hover:shadow-lg transition-all duration-300 text-sm"
                                             >
-                                                View Homepage (Subdomain)
+                                                View Homepage
                                             </a>
-                                            <a
-                                                href={`http://${school.slug}.localhost:3000/login`}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="w-full py-2 border-2 border-indigo-600 text-indigo-600 rounded-lg text-center font-semibold hover:bg-indigo-50 transition-all duration-300 text-sm"
-                                            >
-                                                Login to Dashboard
-                                            </a>
+                                            {hasServicesConfigured(school) ? (
+                                                <a
+                                                    href={`http://${school.slug}.localhost:3000/login`}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="block py-2 border-2 border-indigo-600 text-indigo-600 rounded-lg text-center font-semibold hover:bg-indigo-50 transition-all duration-300 text-sm"
+                                                >
+                                                    Login to Dashboard
+                                                </a>
+                                            ) : (
+                                                <div className="relative group">
+                                                    <button
+                                                        onClick={() => openServicesModal(school)}
+                                                        className="w-full py-2 border-2 border-yellow-500 text-yellow-600 rounded-lg text-center font-semibold hover:bg-yellow-50 transition-all duration-300 text-sm"
+                                                    >
+                                                        ⚠️ Configure Services First
+                                                    </button>
+                                                    <div className="absolute hidden group-hover:block bg-gray-900 text-white text-xs rounded px-2 py-1 whitespace-nowrap -bottom-8 left-0 z-10">
+                                                        Services must be configured to access dashboard
+                                                    </div>
+                                                </div>
+                                            )}
                                             <button
-                                                className="px-4 py-2 border-2 border-gray-300 text-gray-700 rounded-lg hover:border-indigo-600 hover:text-indigo-600 transition-all duration-300"
-                                                title="Settings"
+                                                onClick={() => openServicesModal(school)}
+                                                className="w-full px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-lg font-semibold hover:shadow-lg transition-all duration-300 flex items-center justify-center gap-2"
                                             >
-                                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                                                 </svg>
+                                                Configure Services
                                             </button>
                                         </div>
                                     </div>
@@ -207,6 +249,22 @@ export default function ManagerDashboard() {
                             );
                         })}
                     </div>
+                )}
+
+                {/* Services Modal */}
+                {selectedSchool && (
+                    <SchoolServicesModal
+                        schoolId={selectedSchool.id}
+                        schoolName={selectedSchool.name}
+                        isOpen={isServicesModalOpen}
+                        onClose={() => {
+                            setIsServicesModalOpen(false);
+                            setSelectedSchool(null);
+                        }}
+                        onSave={() => {
+                            // Optionally refresh schools list
+                        }}
+                    />
                 )}
             </div>
         </div>

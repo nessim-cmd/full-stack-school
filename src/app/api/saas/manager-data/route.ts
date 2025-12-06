@@ -33,6 +33,7 @@ export async function GET(req: NextRequest) {
                                 plan: true,
                                 subscriptionStatus: true,
                                 trialEndsAt: true,
+                                enabledServices: true,
                                 createdAt: true
                             }
                         }

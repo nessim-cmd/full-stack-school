@@ -114,6 +114,12 @@ const menuItems = [
         href: "/list/finance",
         visible: ["admin"],
       },
+      {
+        icon: "/finance.png",
+        label: "Payroll",
+        href: "/list/payroll",
+        visible: ["admin"],
+      },
     ],
   },
   {

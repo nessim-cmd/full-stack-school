@@ -1,0 +1,228 @@
+import { PrismaClient } from '@prisma/client';
+import bcrypt from 'bcryptjs';
+
+const prisma = new PrismaClient();
+
+async function main() {
+    console.log('🌱 Starting payroll seed...');
+
+    // Get the first school
+    const school = await prisma.school.findFirst();
+    if (!school) {
+        console.log('❌ No school found. Please run finance seed first.');
+        return;
+    }
+
+    console.log(`✅ Using school: ${school.name}`);
+
+    // Create teachers if they don't exist
+    const teacherData = [
+        { name: "Sarah", surname: "Johnson", email: "sarah.j@demo.com", subject: "Mathematics" },
+        { name: "Michael", surname: "Brown", email: "michael.b@demo.com", subject: "Physics" },
+        { name: "Emily", surname: "Davis", email: "emily.d@demo.com", subject: "Chemistry" },
+    ];
+
+    const teachers = [];
+    for (let i = 0; i < teacherData.length; i++) {
+        const teacher = await prisma.teacher.upsert({
+            where: { username: `teacher_${i + 1}` },
+            update: {},
+            create: {
+                id: `teacher_${school.id}_${i + 1}`,
+                username: `teacher_${i + 1}`,
+                password: await bcrypt.hash("teacher123", 10),
+                name: teacherData[i].name,
+                surname: teacherData[i].surname,
+                email: teacherData[i].email,
+                phone: `+987654321${i}`,
+                address: `${i + 100} Teacher St`,
+                bloodType: "A+",
+                sex: i % 2 === 0 ? "FEMALE" : "MALE",
+                birthday: new Date(1985, i, 15),
+                schoolId: school.id,
+            }
+        });
+        teachers.push(teacher);
+    }
+    console.log(`✅ Created/verified ${teachers.length} teachers`);
+
+    // Set hourly rates for teachers
+    const rates = [50, 45, 55]; // Different rates per teacher
+    for (let i = 0; i < teachers.length; i++) {
+        await prisma.teacherPayrollRate.create({
+            data: {
+                teacherId: teachers[i].id,
+                hourlyRate: rates[i],
+                effectiveFrom: new Date(2025, 0, 1), // Jan 1, 2025
+                schoolId: school.id,
+            }
+        });
+    }
+    console.log(`✅ Set hourly rates for teachers`);
+
+    // Get or create subjects
+    const subjects = [];
+    for (const td of teacherData) {
+        const subject = await prisma.subject.upsert({
+            where: {
+                name_schoolId: {
+                    name: td.subject,
+                    schoolId: school.id
+                }
+            },
+            update: {},
+            create: {
+                name: td.subject,
+                schoolId: school.id,
+            }
+        });
+        subjects.push(subject);
+    }
+
+    // Link teachers to subjects
+    for (let i = 0; i < teachers.length; i++) {
+        await prisma.subject.update({
+            where: { id: subjects[i].id },
+            data: {
+                teachers: {
+                    connect: { id: teachers[i].id }
+                }
+            }
+        });
+    }
+
+    // Get a class
+    const classObj = await prisma.class.findFirst({
+        where: { schoolId: school.id }
+    });
+
+    if (!classObj) {
+        console.log('❌ No class found. Please run finance seed first.');
+        return;
+    }
+
+    // Create lessons for the current month (November 2025)
+    const currentMonth = new Date().getMonth();
+    const currentYear = new Date().getFullYear();
+
+    for (let i = 0; i < teachers.length; i++) {
+        // Create 20 lessons per teacher (varying hours)
+        for (let day = 1; day <= 20; day++) {
+            const lessonDate = new Date(currentYear, currentMonth, day);
+            if (lessonDate.getDay() === 0 || lessonDate.getDay() === 6) continue; // Skip weekends
+
+            const startHour = 9 + (day % 6); // Vary start times
+            const duration = 1 + (day % 2); // 1 or 2 hours
+
+            await prisma.lesson.create({
+                data: {
+                    name: `${teacherData[i].subject} Lesson ${day}`,
+                    day: ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY"][lessonDate.getDay() - 1] as any,
+                    startTime: new Date(currentYear, currentMonth, day, startHour, 0),
+                    endTime: new Date(currentYear, currentMonth, day, startHour + duration, 0),
+                    teacherId: teachers[i].id,
+                    classId: classObj.id,
+                    subjectId: subjects[i].id,
+                    schoolId: school.id,
+                }
+            });
+        }
+    }
+    console.log(`✅ Created lessons for ${teachers.length} teachers`);
+
+    // Calculate payroll for all teachers for current month
+    for (let i = 0; i < teachers.length; i++) {
+        const lessons = await prisma.lesson.findMany({
+            where: {
+                teacherId: teachers[i].id,
+                schoolId: school.id,
+                startTime: {
+                    gte: new Date(currentYear, currentMonth, 1),
+                    lte: new Date(currentYear, currentMonth + 1, 0, 23, 59, 59),
+                },
+            },
+        });
+
+        const totalHours = lessons.reduce((sum, lesson) => {
+            const duration = (new Date(lesson.endTime).getTime() - new Date(lesson.startTime).getTime()) / (1000 * 60 * 60);
+            return sum + duration;
+        }, 0);
+
+        const baseSalary = totalHours * rates[i];
+
+        const payroll = await prisma.teacherPayroll.create({
+            data: {
+                teacherId: teachers[i].id,
+                month: currentMonth + 1,
+                year: currentYear,
+                totalHours,
+                hourlyRate: rates[i],
+                baseSalary,
+                netSalary: baseSalary,
+                status: "CALCULATED",
+                schoolId: school.id,
+            }
+        });
+
+        // Add sample deductions for first teacher
+        if (i === 0) {
+            await prisma.payrollDeduction.create({
+                data: {
+                    payrollId: payroll.id,
+                    reason: "Tax (20%)",
+                    amount: baseSalary * 0.2,
+                    notes: "Income tax deduction"
+                }
+            });
+
+            await prisma.payrollDeduction.create({
+                data: {
+                    payrollId: payroll.id,
+                    reason: "Health Insurance",
+                    amount: 150,
+                    notes: "Monthly health insurance premium"
+                }
+            });
+
+            const totalDeductions = (baseSalary * 0.2) + 150;
+            await prisma.teacherPayroll.update({
+                where: { id: payroll.id },
+                data: {
+                    totalDeductions,
+                    netSalary: baseSalary - totalDeductions,
+                }
+            });
+        }
+
+        // Mark second teacher as PAID
+        if (i === 1) {
+            await prisma.teacherPayroll.update({
+                where: { id: payroll.id },
+                data: {
+                    status: "PAID",
+                    paidAt: new Date(),
+                    paymentMethod: "BANK_TRANSFER"
+                }
+            });
+        }
+    }
+
+    console.log(`✅ Created payroll records for ${teachers.length} teachers`);
+
+    console.log('\n🎉 Payroll seed completed successfully!');
+    console.log('\n📊 Summary:');
+    console.log(`   - Teachers: ${teachers.length}`);
+    console.log(`   - Lessons Created: ~${teachers.length * 20}`);
+    console.log(`   - Payroll Records: ${teachers.length}`);
+    console.log(`   - Month: ${new Date(currentYear, currentMonth).toLocaleString('default', { month: 'long', year: 'numeric' })}`);
+    console.log('\n💡 Navigate to /list/payroll to view the payroll dashboard');
+}
+
+main()
+    .catch((e) => {
+        console.error('❌ Seed failed:', e);
+        process.exit(1);
+    })
+    .finally(async () => {
+        await prisma.$disconnect();
+    });

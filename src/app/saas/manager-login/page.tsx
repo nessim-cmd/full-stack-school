@@ -20,10 +20,6 @@ export default function ManagerLoginPage() {
         // Check if coming from registration
         if (searchParams.get('registered') === 'true') {
             setSuccessMessage("School created successfully! Please check your email for admin credentials.");
-            const email = searchParams.get('email');
-            if (email) {
-                setFormData(prev => ({ ...prev, email }));
-            }
         }
     }, [searchParams]);
 

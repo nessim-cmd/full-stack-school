@@ -1140,19 +1140,89 @@ export const createMessage = async (
       }
     });
 
-    // Add notification job
-    const { addMessageNotificationJob } = await import("./queue/notificationQueue");
+    // Create in-app notifications for all recipients
+    const { createNotification } = await import("./notification-actions");
+    const { redis } = await import("./redis");
 
-    await addMessageNotificationJob({
-      messageId: message.id,
-      subject: message.subject,
-      senderName: message.senderName,
-      recipients: message.recipients.map(r => ({
-        id: r.recipientId,
-        role: r.recipientRole,
-        name: r.recipientName
-      }))
-    });
+    for (const recipient of message.recipients) {
+      await createNotification(
+        recipient.recipientId,
+        recipient.recipientRole,
+        `New Message: ${message.subject}`,
+        `You have a new message from ${message.senderName}. Check your messages.`,
+        "message_received",
+        schoolId
+      );
+
+      // Publish to Redis for real-time notification
+      await redis.publish(
+        `notifications:${recipient.recipientId}`,
+        JSON.stringify({
+          id: Date.now().toString(),
+          title: `New Message: ${message.subject}`,
+          message: `You have a new message from ${message.senderName}`,
+          type: "message_received",
+          createdAt: new Date(),
+          read: false,
+        })
+      );
+    }
+
+    // Send email notifications
+    try {
+      const nodemailer = await import("nodemailer");
+
+      const port = parseInt(process.env.SMTP_PORT || "587");
+      const transporter = nodemailer.default.createTransport({
+        host: process.env.SMTP_HOST,
+        port: port,
+        secure: port === 465, // true for 465, false for other ports
+        auth: {
+          user: process.env.SMTP_USER,
+          pass: process.env.SMTP_PASS?.replace(/\s+/g, ""), // Remove spaces from app password
+        },
+      });
+
+      for (const recipient of message.recipients) {
+        // Fetch recipient email
+        let recipientEmail = "";
+        if (recipient.recipientRole === "teacher") {
+          const teacher = await prisma.teacher.findUnique({ where: { id: recipient.recipientId }, select: { email: true } });
+          recipientEmail = teacher?.email || "";
+        } else if (recipient.recipientRole === "student") {
+          const student = await prisma.student.findUnique({ where: { id: recipient.recipientId }, select: { email: true } });
+          recipientEmail = student?.email || "";
+        } else if (recipient.recipientRole === "parent") {
+          const parent = await prisma.parent.findUnique({ where: { id: recipient.recipientId }, select: { email: true } });
+          recipientEmail = parent?.email || "";
+        }
+
+        if (recipientEmail) {
+          await transporter.sendMail({
+            from: `"School Management System" <${process.env.SMTP_USER}>`,
+            to: recipientEmail,
+            subject: `New Message: ${message.subject}`,
+            html: `
+              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <h2 style="color: #333;">You have a new message</h2>
+                <p><strong>From:</strong> ${message.senderName}</p>
+                <p><strong>Subject:</strong> ${message.subject}</p>
+                <div style="background-color: #f5f5f5; padding: 15px; border-radius: 5px; margin: 20px 0;">
+                  <p>${message.content}</p>
+                </div>
+                <p style="color: #666; font-size: 14px;">
+                  Please log in to your school portal to reply to this message.
+                </p>
+              </div>
+            `,
+          });
+          console.log(`✅ Email sent to ${recipientEmail}`);
+        }
+      }
+    } catch (emailError) {
+      console.error("❌ Failed to send email notifications:", emailError);
+      // Don't fail the whole operation if email fails
+    }
 
     revalidatePath("/list/messages");
     return { success: true, error: false, message: "Message sent!" };

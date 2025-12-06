@@ -66,8 +66,8 @@ export default function RegisterSchoolPage() {
                 throw new Error(data.error || "Registration failed");
             }
 
-            // Redirect to manager login with success message
-            router.push(`/saas/manager-login?registered=true&email=${formData.managerEmail}`);
+            // Redirect to manager login with success message (no email in URL for security)
+            router.push(`/saas/manager-login?registered=true`);
         } catch (err: any) {
             setError(err.message);
         } finally {

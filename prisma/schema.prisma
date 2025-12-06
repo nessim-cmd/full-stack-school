@@ -46,6 +46,9 @@ model School {
   trialEndsAt     DateTime
   subscriptionEndsAt DateTime?
   
+  // Enabled Services/Modules (ERP-style)
+  enabledServices String   @default("[]") // JSON array of enabled service keys
+  
   // Relations
   admins          Admin[]
   students        Student[]
@@ -76,10 +79,6 @@ model School {
   feeStructures   FeeStructure[]
   studentInvoices StudentInvoice[]
   payments        Payment[]
-  
-  // Teacher Payroll
-  payrollRates    TeacherPayrollRate[]
-  payrolls        TeacherPayroll[]
 }
 
 
@@ -179,9 +178,6 @@ model Teacher {
 
   schoolId String
   school   School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  
-  payrollRates TeacherPayrollRate[]
-  payrolls     TeacherPayroll[]
 }
 
 model Parent {
@@ -669,78 +665,4 @@ enum PaymentMethod {
   BANK_TRANSFER
   CHECK
   ONLINE
-}
-
-// ============ TEACHER PAYROLL MODELS ============
-
-model TeacherPayrollRate {
-  id          String   @id @default(uuid())
-  hourlyRate  Float    // Price per hour
-  effectiveFrom DateTime @default(now())
-  effectiveTo DateTime?
-  
-  teacherId   String
-  teacher     Teacher @relation(fields: [teacherId], references: [id], onDelete: Cascade)
-  
-  schoolId    String
-  school      School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-}
-
-model TeacherPayroll {
-  id                String   @id @default(uuid())
-  
-  // Basic info
-  month             Int      // 1-12
-  year              Int
-  status            PayrollStatus @default(PENDING)
-  
-  // Calculations
-  totalHours        Float
-  hourlyRate        Float
-  baseSalary        Float   // totalHours * hourlyRate
-  totalDeductions   Float   @default(0)
-  netSalary         Float   // baseSalary - totalDeductions
-  
-  // Payment info
-  paidAt            DateTime?
-  paymentMethod     PaymentMethod?
-  notes             String?
-  
-  // Relations
-  teacherId         String
-  teacher           Teacher @relation(fields: [teacherId], references: [id], onDelete: Cascade)
-  
-  deductions        PayrollDeduction[]
-  
-  schoolId          String
-  school            School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-  
-  @@unique([teacherId, month, year, schoolId])
-}
-
-model PayrollDeduction {
-  id            String   @id @default(uuid())
-  reason        String   // "Tax", "Insurance", "Late Fee", "Absence Penalty", etc.
-  amount        Float
-  notes         String?
-  
-  payrollId     String
-  payroll       TeacherPayroll @relation(fields: [payrollId], references: [id], onDelete: Cascade)
-  
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-}
-
-enum PayrollStatus {
-  PENDING
-  CALCULATED
-  APPROVED
-  PAID
-  CANCELLED
 }
