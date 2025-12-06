@@ -12,6 +12,7 @@ export const metadata: Metadata = {
   title: "SchoolHub - School Management System",
   description: "Complete school management system with attendance, academics, finance, and more.",
   manifest: "/manifest.json",
+  themeColor: "#6366f1",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
@@ -26,12 +27,14 @@ export const metadata: Metadata = {
       { url: "/icon-152x152.png", sizes: "152x152", type: "image/png" },
     ],
   },
-  viewport: {
-    width: "device-width",
-    initialScale: 1,
-    maximumScale: 1,
-    userScalable: false,
-  },
+};
+
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  themeColor: "#6366f1",
 };
 
 export default function RootLayout({

@@ -77,11 +77,19 @@ export async function middleware(req: NextRequest) {
 
   // Public routes that don't require authentication
   const publicRoutes = ["/", "/apply", "/access-denied"];
+  
+  // PWA files must be publicly accessible
+  const isPWAFile = url.pathname === "/manifest.json" || 
+                    url.pathname === "/sw.js" || 
+                    url.pathname === "/workbox-4754cb34.js" ||
+                    url.pathname.startsWith("/icon-") ||
+                    url.pathname === "/offline.html";
+  
   // Also allow all /saas routes, /api/auth routes, and /super-admin/login to be public
   const isSaasRoute = url.pathname.startsWith("/saas");
   const isAuthRoute = url.pathname.startsWith("/api/auth");
   const isSuperAdminLogin = url.pathname === "/super-admin/login";
-  const isPublicRoute = publicRoutes.includes(url.pathname) || isSaasRoute || isAuthRoute || isSuperAdminLogin;
+  const isPublicRoute = publicRoutes.includes(url.pathname) || isSaasRoute || isAuthRoute || isSuperAdminLogin || isPWAFile;
 
   // If on a subdomain and accessing root, it's the school homepage (public)
   if (subdomain && url.pathname === "/") {
