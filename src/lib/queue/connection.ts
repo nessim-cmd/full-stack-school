@@ -2,20 +2,36 @@
 import { Queue, Worker, QueueEvents } from "bullmq";
 import Redis from "ioredis";
 
-// Redis connection configuration
-const redisConnection = new Redis({
-    host: process.env.REDIS_HOST || "localhost",
-    port: parseInt(process.env.REDIS_PORT || "6379"),
-    maxRetriesPerRequest: null,
-});
+let redisConnectionInstance: Redis | null = null;
 
-// Test connection
-redisConnection.on("connect", () => {
-    console.log("✅ [Redis] Connected successfully");
-});
+// Lazy-load Redis connection
+export const getRedisConnection = () => {
+    if (!process.env.REDIS_HOST && !process.env.REDIS_URL) {
+        console.warn("Redis not configured, queue system disabled");
+        return null;
+    }
 
-redisConnection.on("error", (err) => {
-    console.error("❌ [Redis] Connection error:", err);
-});
+    if (!redisConnectionInstance) {
+        redisConnectionInstance = new Redis({
+            host: process.env.REDIS_HOST || "localhost",
+            port: parseInt(process.env.REDIS_PORT || "6379"),
+            maxRetriesPerRequest: null,
+            lazyConnect: true,
+            enableOfflineQueue: false,
+        });
 
-export { redisConnection };
+        // Test connection
+        redisConnectionInstance.on("connect", () => {
+            console.log("✅ [Redis] Connected successfully");
+        });
+
+        redisConnectionInstance.on("error", (err) => {
+            console.error("❌ [Redis] Connection error:", err);
+        });
+    }
+
+    return redisConnectionInstance;
+};
+
+// For backward compatibility
+export const redisConnection = getRedisConnection();

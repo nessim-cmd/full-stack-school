@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 
-export default function ManagerLoginPage() {
+function ManagerLoginForm() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const [loading, setLoading] = useState(false);
@@ -158,5 +158,13 @@ export default function ManagerLoginPage() {
                 </div>
             </div>
         </div>
+    );
+}
+
+export default function ManagerLoginPage() {
+    return (
+        <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Loading...</div>}>
+            <ManagerLoginForm />
+        </Suspense>
     );
 }
