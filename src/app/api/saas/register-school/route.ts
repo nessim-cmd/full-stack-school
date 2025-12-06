@@ -120,11 +120,16 @@ export async function POST(req: NextRequest) {
             return { school, membership, admin, adminPassword };
         });
 
+        // Determine base URL based on environment
+        const baseUrl = process.env.NODE_ENV === 'production' 
+            ? `https://${slug}.${process.env.NEXT_PUBLIC_DOMAIN || 'erpschool-two.vercel.app'}`
+            : `http://${slug}.localhost:3000`;
+        
         // TODO: Send welcome email with admin credentials
         console.log("Admin credentials:", {
             username: `admin_${slug}`,
             password: result.adminPassword,
-            loginUrl: `http://${slug}.localhost:3000/login`
+            loginUrl: `${baseUrl}/login`
         });
 
         return NextResponse.json({

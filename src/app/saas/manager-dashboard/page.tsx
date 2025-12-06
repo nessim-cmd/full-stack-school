@@ -213,7 +213,7 @@ export default function ManagerDashboard() {
                                             </a>
                                             {hasServicesConfigured(school) ? (
                                                 <a
-                                                    href={`http://${school.slug}.localhost:3000/login`}
+                                                    href={`/login?school=${school.slug}`}
                                                     target="_blank"
                                                     rel="noopener noreferrer"
                                                     className="block py-2 border-2 border-indigo-600 text-indigo-600 rounded-lg text-center font-semibold hover:bg-indigo-50 transition-all duration-300 text-sm"
