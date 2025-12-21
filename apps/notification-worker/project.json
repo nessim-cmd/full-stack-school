@@ -1,0 +1,68 @@
+{
+  "name": "notification-worker",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "apps/notification-worker/src",
+  "projectType": "application",
+  "tags": ["type:worker", "scope:notifications"],
+  "targets": {
+    "build": {
+      "executor": "@nx/esbuild:esbuild",
+      "outputs": ["{options.outputPath}"],
+      "defaultConfiguration": "production",
+      "options": {
+        "platform": "node",
+        "outputPath": "dist/apps/notification-worker",
+        "format": ["cjs"],
+        "bundle": false,
+        "main": "apps/notification-worker/src/main.ts",
+        "tsConfig": "apps/notification-worker/tsconfig.app.json",
+        "assets": ["apps/notification-worker/src/assets", {"input": "apps/notification-worker/src/generated", "glob": "**/*", "output": "../generated"}],
+        "generatePackageJson": true,
+        "esbuildOptions": {
+          "sourcemap": true,
+          "outExtension": {
+            ".js": ".js"
+          }
+        }
+      },
+      "configurations": {
+        "development": {},
+        "production": {
+          "esbuildOptions": {
+            "sourcemap": false,
+            "outExtension": {
+              ".js": ".js"
+            }
+          }
+        }
+      }
+    },
+    "serve": {
+      "executor": "@nx/js:node",
+      "defaultConfiguration": "development",
+      "dependsOn": ["build"],
+      "options": {
+        "buildTarget": "notification-worker:build",
+        "runBuildTargetDependencies": false
+      },
+      "configurations": {
+        "development": {
+          "buildTarget": "notification-worker:build:development"
+        },
+        "production": {
+          "buildTarget": "notification-worker:build:production"
+        }
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    },
+    "test": {
+      "executor": "@nx/jest:jest",
+      "outputs": ["{workspaceRoot}/coverage/{projectRoot}"],
+      "options": {
+        "jestConfig": "apps/notification-worker/jest.config.ts"
+      }
+    }
+  }
+}

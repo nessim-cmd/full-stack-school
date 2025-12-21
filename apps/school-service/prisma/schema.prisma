@@ -1,0 +1,108 @@
+// School Service Prisma Schema
+// Manages school entities, settings, and memberships
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma-client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// Enums
+// ============================================
+
+enum PlanType {
+  FREE
+  MONTHLY
+  YEARLY
+}
+
+enum SubscriptionStatus {
+  TRIAL
+  ACTIVE
+  PAST_DUE
+  CANCELED
+}
+
+// ============================================
+// Core School Models
+// ============================================
+
+model School {
+  id                 String             @id @default(uuid())
+  name               String
+  slug               String             @unique // subdomain
+  domain             String?            @unique // custom domain
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  // Subscription
+  plan               PlanType           @default(FREE)
+  subscriptionStatus SubscriptionStatus @default(TRIAL)
+  trialEndsAt        DateTime
+  subscriptionEndsAt DateTime?
+
+  // Enabled Services/Modules (ERP-style)
+  enabledServices    String             @default("[]") // JSON array of enabled service keys
+
+  // Relations
+  settings           SiteSettings?
+  memberships        SchoolMembership[]
+}
+
+model SchoolManager {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  schools SchoolMembership[]
+}
+
+model SchoolMembership {
+  id        String   @id @default(uuid())
+  managerId String
+  manager   SchoolManager @relation(fields: [managerId], references: [id], onDelete: Cascade)
+  schoolId  String
+  school    School        @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  role      String        @default("owner") // "owner", "admin", etc.
+  createdAt DateTime      @default(now())
+
+  @@unique([managerId, schoolId])
+}
+
+model SiteSettings {
+  id              String   @id @default(uuid())
+  schoolId        String   @unique
+  school          School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  // Theme settings
+  primaryColor    String?  @default("#1a73e8")
+  secondaryColor  String?  @default("#fbbc04")
+  logo            String?
+  favicon         String?
+
+  // Contact info
+  email           String?
+  phone           String?
+  address         String?
+  website         String?
+
+  // Academic year settings
+  academicYearStart DateTime?
+  academicYearEnd   DateTime?
+
+  // Other settings
+  timezone        String?  @default("UTC")
+  dateFormat      String?  @default("MM/DD/YYYY")
+  timeFormat      String?  @default("12h")
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}

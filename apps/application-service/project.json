@@ -1,0 +1,68 @@
+{
+  "name": "application-service",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "apps/application-service/src",
+  "projectType": "application",
+  "tags": ["type:service", "scope:applications"],
+  "targets": {
+    "build": {
+      "executor": "@nx/esbuild:esbuild",
+      "outputs": ["{options.outputPath}"],
+      "defaultConfiguration": "production",
+      "options": {
+        "platform": "node",
+        "outputPath": "dist/apps/application-service",
+        "format": ["cjs"],
+        "bundle": false,
+        "main": "apps/application-service/src/main.ts",
+        "tsConfig": "apps/application-service/tsconfig.app.json",
+        "assets": ["apps/application-service/src/assets", {"input": "apps/application-service/src/generated", "glob": "**/*", "output": "../generated"}],
+        "generatePackageJson": true,
+        "esbuildOptions": {
+          "sourcemap": true,
+          "outExtension": {
+            ".js": ".js"
+          }
+        }
+      },
+      "configurations": {
+        "development": {},
+        "production": {
+          "esbuildOptions": {
+            "sourcemap": false,
+            "outExtension": {
+              ".js": ".js"
+            }
+          }
+        }
+      }
+    },
+    "serve": {
+      "executor": "@nx/js:node",
+      "defaultConfiguration": "development",
+      "dependsOn": ["build"],
+      "options": {
+        "buildTarget": "application-service:build",
+        "runBuildTargetDependencies": false
+      },
+      "configurations": {
+        "development": {
+          "buildTarget": "application-service:build:development"
+        },
+        "production": {
+          "buildTarget": "application-service:build:production"
+        }
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    },
+    "test": {
+      "executor": "@nx/jest:jest",
+      "outputs": ["{workspaceRoot}/coverage/{projectRoot}"],
+      "options": {
+        "jestConfig": "apps/application-service/jest.config.ts"
+      }
+    }
+  }
+}

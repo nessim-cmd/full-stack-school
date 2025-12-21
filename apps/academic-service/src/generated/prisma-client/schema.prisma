@@ -1,0 +1,130 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
+  output          = "../src/generated/prisma-client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["academic"]
+}
+
+model Grade {
+  id       Int       @id @default(autoincrement())
+  level    Int       @unique
+  schoolId String
+  classes  Class[]
+  subjects Subject[]
+
+  @@map("grades")
+  @@schema("academic")
+}
+
+model Class {
+  id           Int      @id @default(autoincrement())
+  name         String
+  capacity     Int
+  supervisorId String?
+  gradeId      Int
+  schoolId     String
+  grade        Grade    @relation(fields: [gradeId], references: [id])
+  lessons      Lesson[]
+
+  @@unique([name, schoolId])
+  @@map("classes")
+  @@schema("academic")
+}
+
+model Subject {
+  id       Int      @id @default(autoincrement())
+  name     String
+  schoolId String
+  gradeId  Int?
+  grade    Grade?   @relation(fields: [gradeId], references: [id])
+  lessons  Lesson[]
+
+  @@unique([name, schoolId])
+  @@map("subjects")
+  @@schema("academic")
+}
+
+model Lesson {
+  id        Int      @id @default(autoincrement())
+  name      String
+  day       String // MONDAY, TUESDAY, etc.
+  startTime DateTime
+  endTime   DateTime
+  subjectId Int
+  classId   Int
+  teacherId String
+  schoolId  String
+  subject   Subject  @relation(fields: [subjectId], references: [id])
+  class     Class    @relation(fields: [classId], references: [id])
+
+  @@map("lessons")
+  @@schema("academic")
+}
+
+model Exam {
+  id        Int      @id @default(autoincrement())
+  title     String
+  startTime DateTime
+  endTime   DateTime
+  lessonId  Int?
+  schoolId  String
+  results   Result[]
+
+  @@map("exams")
+  @@schema("academic")
+}
+
+model Result {
+  id        Int     @id @default(autoincrement())
+  score     Int
+  examId    Int?
+  studentId String
+  schoolId  String
+  noteUrl   String?
+  exam      Exam?   @relation(fields: [examId], references: [id])
+
+  @@map("results")
+  @@schema("academic")
+}
+
+model Assignment {
+  id        Int      @id @default(autoincrement())
+  title     String
+  startDate DateTime
+  dueDate   DateTime
+  lessonId  Int?
+  schoolId  String
+
+  @@map("assignments")
+  @@schema("academic")
+}
+
+model Event {
+  id          Int      @id @default(autoincrement())
+  title       String
+  description String
+  startTime   DateTime
+  endTime     DateTime
+  classId     Int?
+  schoolId    String
+
+  @@map("events")
+  @@schema("academic")
+}
+
+model Announcement {
+  id          Int      @id @default(autoincrement())
+  title       String
+  description String
+  date        DateTime
+  classId     Int?
+  schoolId    String
+
+  @@map("announcements")
+  @@schema("academic")
+}

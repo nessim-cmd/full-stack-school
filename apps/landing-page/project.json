@@ -1,0 +1,31 @@
+{
+  "name": "landing-page",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "apps/landing-page",
+  "projectType": "application",
+  "tags": [],
+  "targets": {
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "cd apps/landing-page && NODE_ENV=production npx next build",
+        "cwd": "{workspaceRoot}"
+      },
+      "outputs": ["{projectRoot}/.next"]
+    },
+    "serve": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "cd apps/landing-page && npx next dev -p 4006",
+        "cwd": "{workspaceRoot}"
+      }
+    },
+    "start": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "cd apps/landing-page && npx next start -p 4006",
+        "cwd": "{workspaceRoot}"
+      }
+    }
+  }
+}

@@ -1,27 +1,198 @@
 version: '3.8'
 
 services:
+  # PostgreSQL Database
   postgres:
-    image: postgres:15
-    container_name: postgres_db
+    image: postgres:16-alpine
+    container_name: school-postgres
     environment:
-      POSTGRES_USER: myuser
-      POSTGRES_PASSWORD: mypassword
-      POSTGRES_DB: mydb
+      POSTGRES_USER: school_user
+      POSTGRES_PASSWORD: school_password
+      POSTGRES_DB: school_db
     ports:
-      - '5433:5432'
+      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    
-  app:
-    build: .
-    container_name: nextjs_app
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    networks:
+      - school-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U school_user -d school_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis
+  redis:
+    image: redis:7-alpine
+    container_name: school-redis
     ports:
-      - '3000:3000'
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - school-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # RabbitMQ (Event Bus)
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: school-rabbitmq
     environment:
-      DATABASE_URL: postgresql://myuser:mypassword@postgres:5432/mydb
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    ports:
+      - "5672:5672"   # AMQP
+      - "15672:15672" # Management UI
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - school-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # API Gateway
+  api-gateway:
+    build:
+      context: .
+      dockerfile: apps/api-gateway/Dockerfile
+    container_name: school-api-gateway
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+      - DATABASE_URL=postgresql://school_user:school_password@postgres:5432/school_db
+      - REDIS_URL=redis://redis:6379
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672
+    ports:
+      - "3000:3000"
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - school-network
+    volumes:
+      - ./apps/api-gateway:/app/apps/api-gateway
+      - /app/node_modules
+    command: npm run dev:api-gateway
+
+  # Authentication Service
+  auth-service:
+    build:
+      context: .
+      dockerfile: apps/auth-service/Dockerfile
+    container_name: school-auth-service
+    environment:
+      - NODE_ENV=development
+      - PORT=3001
+      - DATABASE_URL=postgresql://school_user:school_password@postgres:5432/school_db?schema=auth
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=${JWT_SECRET}
+    ports:
+      - "3001:3001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - school-network
+    volumes:
+      - ./apps/auth-service:/app/apps/auth-service
+      - /app/node_modules
+
+  # School Service
+  school-service:
+    build:
+      context: .
+      dockerfile: apps/school-service/Dockerfile
+    container_name: school-school-service
+    environment:
+      - NODE_ENV=development
+      - PORT=3002
+      - DATABASE_URL=postgresql://school_user:school_password@postgres:5432/school_db?schema=schools
+      - REDIS_URL=redis://redis:6379
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672
+    ports:
+      - "3002:3002"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - school-network
+    volumes:
+      - ./apps/school-service:/app/apps/school-service
+      - /app/node_modules
+
+  # Notification Worker
+  notification-worker:
+    build:
+      context: .
+      dockerfile: apps/notification-worker/Dockerfile
+    container_name: school-notification-worker
+    environment:
+      - NODE_ENV=development
+      - DATABASE_URL=postgresql://school_user:school_password@postgres:5432/school_db
+      - REDIS_URL=redis://redis:6379
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PORT=${SMTP_PORT}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASS=${SMTP_PASS}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - school-network
+    volumes:
+      - ./apps/notification-worker:/app/apps/notification-worker
+      - /app/node_modules
+
+  # Admin Frontend
+  admin-frontend:
+    build:
+      context: .
+      dockerfile: apps/admin-frontend/Dockerfile
+    container_name: school-admin-frontend
+    environment:
+      - NODE_ENV=development
+      - PORT=4000
+      - NEXT_PUBLIC_API_URL=http://localhost:3000
+    ports:
+      - "4000:4000"
+    depends_on:
+      - api-gateway
+    networks:
+      - school-network
+    volumes:
+      - ./apps/admin-frontend:/app/apps/admin-frontend
+      - /app/node_modules
+      - /app/apps/admin-frontend/.next
 
 volumes:
   postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  rabbitmq_data:
+    driver: local
+
+networks:
+  school-network:
+    driver: bridge

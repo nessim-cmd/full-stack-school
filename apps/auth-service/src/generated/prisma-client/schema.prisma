@@ -1,0 +1,89 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
+  output          = "../src/generated/prisma-client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["auth"]
+}
+
+// Authentication data for all user types
+model Admin {
+  id       String @id @default(uuid())
+  username String @unique
+  password String
+  schoolId String
+
+  @@map("admins")
+  @@schema("auth")
+}
+
+model Teacher {
+  id       String @id @default(uuid())
+  username String @unique
+  password String
+  schoolId String
+
+  @@map("teachers")
+  @@schema("auth")
+}
+
+model Student {
+  id       String @id @default(uuid())
+  username String @unique
+  password String
+  schoolId String
+
+  @@map("students")
+  @@schema("auth")
+}
+
+model Parent {
+  id       String @id @default(uuid())
+  username String @unique
+  password String
+  schoolId String
+
+  @@map("parents")
+  @@schema("auth")
+}
+
+model SchoolManager {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("school_managers")
+  @@schema("auth")
+}
+
+model SuperAdmin {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("super_admins")
+  @@schema("auth")
+}
+
+model PasswordResetToken {
+  id        Int      @id @default(autoincrement())
+  email     String
+  otp       String
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([email, otp])
+  @@map("password_reset_tokens")
+  @@schema("auth")
+}

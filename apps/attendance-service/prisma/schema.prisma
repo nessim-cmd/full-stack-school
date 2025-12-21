@@ -1,0 +1,43 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
+  output          = "../src/generated/prisma-client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["attendance"]
+}
+
+model Attendance {
+  id        Int      @id @default(autoincrement())
+  date      DateTime
+  present   Boolean
+  studentId String
+  lessonId  Int
+  schoolId  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([date, studentId, lessonId])
+  @@map("attendances")
+  @@schema("attendance")
+}
+
+model AttendanceSummary {
+  id            Int      @id @default(autoincrement())
+  studentId     String
+  schoolId      String
+  month         Int
+  year          Int
+  totalDays     Int      @default(0)
+  presentDays   Int      @default(0)
+  absentDays    Int      @default(0)
+  percentage    Float    @default(0)
+  updatedAt     DateTime @updatedAt
+
+  @@unique([studentId, month, year])
+  @@map("attendance_summaries")
+  @@schema("attendance")
+}
