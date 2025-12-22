@@ -3,40 +3,19 @@ import { authController } from '../controllers/auth.controller';
 
 const router = Router();
 
-/**
- * POST /api/auth/login
- * Login endpoint for all user types
- */
-router.post('/login', authController.login);
+// Login routes
+router.post('/login', authController.login.bind(authController));
+router.post('/manager/login', authController.managerLogin.bind(authController));
+router.post('/super-admin/login', authController.superAdminLogin.bind(authController));
 
-/**
- * POST /api/auth/logout
- * Logout endpoint (clears cookies)
- */
-router.post('/logout', authController.logout);
+// Logout
+router.post('/logout', authController.logout.bind(authController));
 
-/**
- * POST /api/auth/password-reset/request
- * Request password reset (send OTP via email)
- */
-router.post('/password-reset/request', authController.requestPasswordReset);
+// Password reset
+router.post('/password-reset/request', authController.requestPasswordReset.bind(authController));
+router.post('/password-reset/complete', authController.completePasswordReset.bind(authController));
 
-/**
- * POST /api/auth/password-reset/verify
- * Verify OTP
- */
-router.post('/password-reset/verify', authController.verifyOTP);
-
-/**
- * POST /api/auth/password-reset/complete
- * Complete password reset with OTP
- */
-router.post('/password-reset/complete', authController.completePasswordReset);
-
-/**
- * POST /api/auth/verify
- * Verify JWT token (for inter-service communication)
- */
-router.post('/verify', authController.verifyToken);
+// Token verification
+router.get('/verify', authController.verifyToken.bind(authController));
 
 export default router;

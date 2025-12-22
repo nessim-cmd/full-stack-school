@@ -3,20 +3,24 @@ import { settingsController } from '../controllers/settings.controller';
 
 const router = Router();
 
-// Settings routes for a specific school
-router.get('/:schoolId', settingsController.getSettings);
-router.put('/:schoolId', settingsController.updateSettings);
+// Full site settings for a specific school
+router.get('/:schoolId', settingsController.getSiteSettings);
+router.put('/:schoolId', settingsController.updateSiteSettings);
 
-// Theme settings
-router.get('/:schoolId/theme', settingsController.getThemeSettings);
-router.put('/:schoolId/theme', settingsController.updateThemeSettings);
+// Branding settings (schoolName, logo, tagline)
+router.get('/:schoolId/branding', settingsController.getBrandingSettings);
+router.put('/:schoolId/branding', settingsController.updateBrandingSettings);
 
-// Contact settings
-router.get('/:schoolId/contact', settingsController.getContactSettings);
-router.put('/:schoolId/contact', settingsController.updateContactSettings);
+// Hero settings (hero section)
+router.get('/:schoolId/hero', settingsController.getHeroSettings);
+router.put('/:schoolId/hero', settingsController.updateHeroSettings);
 
-// Academic year settings
-router.get('/:schoolId/academic-year', settingsController.getAcademicYearSettings);
-router.put('/:schoolId/academic-year', settingsController.updateAcademicYearSettings);
+// Stats settings (numbers/metrics)
+router.get('/:schoolId/stats', settingsController.getStatsSettings);
+router.put('/:schoolId/stats', settingsController.updateStatsSettings);
+
+// About settings (mission, vision, values)
+router.get('/:schoolId/about', settingsController.getAboutSettings);
+router.put('/:schoolId/about', settingsController.updateAboutSettings);
 
 export default router;

@@ -1,239 +1,121 @@
 import { Request, Response } from 'express';
 import { eventService } from '../services/event.service';
-import { HTTP_STATUS } from '@workspace/shared/constants';
 
 export class EventController {
-  // ============= Events =============
-  async getEvents(req: Request, res: Response): Promise<void> {
+  async getEvents(req: Request, res: Response) {
     try {
-      const { schoolId } = req.params;
-      const { page, limit, startDate, endDate, type, classId } = req.query;
-      
-      const result = await eventService.getEvents(
-        schoolId,
-        Number(page) || 1,
-        Number(limit) || 20,
-        {
-          startDate: startDate ? new Date(startDate as string) : undefined,
-          endDate: endDate ? new Date(endDate as string) : undefined,
-          type: type as string,
-          classId: classId ? Number(classId) : undefined,
-        }
-      );
-      
-      res.status(HTTP_STATUS.OK).json({ success: true, ...result });
+      const { schoolId, classId, startDate, endDate } = req.query;
+      const events = await eventService.getEvents(schoolId as string, {
+        classId: classId ? parseInt(classId as string) : undefined,
+        startDate: startDate ? new Date(startDate as string) : undefined,
+        endDate: endDate ? new Date(endDate as string) : undefined,
+      });
+      res.json(events);
     } catch (error) {
-      console.error('Get events error:', error);
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Failed to fetch events' });
+      console.error('Error getting events:', error);
+      res.status(500).json({ error: 'Failed to get events' });
     }
   }
 
-  async getEventById(req: Request, res: Response): Promise<void> {
+  async getEventById(req: Request, res: Response) {
     try {
       const { id } = req.params;
-      const event = await eventService.getEventById(id);
-      
+      const event = await eventService.getEventById(parseInt(id));
       if (!event) {
-        res.status(HTTP_STATUS.NOT_FOUND).json({ success: false, error: 'Event not found' });
+        res.status(404).json({ error: 'Event not found' });
         return;
       }
-      
-      res.status(HTTP_STATUS.OK).json({ success: true, data: event });
+      res.json(event);
     } catch (error) {
-      console.error('Get event error:', error);
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Failed to fetch event' });
+      console.error('Error getting event:', error);
+      res.status(500).json({ error: 'Failed to get event' });
     }
   }
 
-  async createEvent(req: Request, res: Response): Promise<void> {
+  async createEvent(req: Request, res: Response) {
     try {
-      const event = await eventService.createEvent(req.body);
-      res.status(HTTP_STATUS.CREATED).json({ success: true, data: event });
+      const { title, description, startTime, endTime, classId, schoolId } = req.body;
+      const event = await eventService.createEvent({
+        title,
+        description,
+        startTime: new Date(startTime),
+        endTime: new Date(endTime),
+        classId: classId ? parseInt(classId) : undefined,
+        schoolId,
+      });
+      res.status(201).json(event);
     } catch (error) {
-      console.error('Create event error:', error);
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Failed to create event' });
+      console.error('Error creating event:', error);
+      res.status(500).json({ error: 'Failed to create event' });
     }
   }
 
-  async updateEvent(req: Request, res: Response): Promise<void> {
-    try {
-      const { id } = req.params;
-      const event = await eventService.updateEvent(id, req.body);
-      res.status(HTTP_STATUS.OK).json({ success: true, data: event });
-    } catch (error) {
-      console.error('Update event error:', error);
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Failed to update event' });
-    }
-  }
-
-  async deleteEvent(req: Request, res: Response): Promise<void> {
+  async updateEvent(req: Request, res: Response) {
     try {
       const { id } = req.params;
-      await eventService.deleteEvent(id);
-      res.status(HTTP_STATUS.OK).json({ success: true, message: 'Event deleted successfully' });
+      const { title, description, startTime, endTime, classId } = req.body;
+      const event = await eventService.updateEvent(parseInt(id), {
+        title,
+        description,
+        startTime: startTime ? new Date(startTime) : undefined,
+        endTime: endTime ? new Date(endTime) : undefined,
+        classId: classId ? parseInt(classId) : undefined,
+      });
+      res.json(event);
     } catch (error) {
-      console.error('Delete event error:', error);
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Failed to delete event' });
+      console.error('Error updating event:', error);
+      res.status(500).json({ error: 'Failed to update event' });
     }
   }
 
-  // ============= Attendees =============
-  async addAttendee(req: Request, res: Response): Promise<void> {
+  async deleteEvent(req: Request, res: Response) {
     try {
       const { id } = req.params;
-      const { userId, userType } = req.body;
-      const attendee = await eventService.addAttendee(id, userId, userType);
-      res.status(HTTP_STATUS.CREATED).json({ success: true, data: attendee });
+      await eventService.deleteEvent(parseInt(id));
+      res.status(204).send();
     } catch (error) {
-      console.error('Add attendee error:', error);
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Failed to add attendee' });
+      console.error('Error deleting event:', error);
+      res.status(500).json({ error: 'Failed to delete event' });
     }
   }
 
-  async updateAttendeeStatus(req: Request, res: Response): Promise<void> {
+  async getUpcomingEvents(req: Request, res: Response) {
     try {
-      const { id, userId } = req.params;
-      const { status } = req.body;
-      const attendee = await eventService.updateAttendeeStatus(id, userId, status);
-      res.status(HTTP_STATUS.OK).json({ success: true, data: attendee });
+      const { schoolId, limit } = req.query;
+      const events = await eventService.getUpcomingEvents(
+        schoolId as string,
+        limit ? parseInt(limit as string) : undefined
+      );
+      res.json(events);
     } catch (error) {
-      console.error('Update attendee status error:', error);
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Failed to update attendee status' });
+      console.error('Error getting upcoming events:', error);
+      res.status(500).json({ error: 'Failed to get upcoming events' });
     }
   }
 
-  async removeAttendee(req: Request, res: Response): Promise<void> {
+  async getEventsByClass(req: Request, res: Response) {
     try {
-      const { id, userId } = req.params;
-      await eventService.removeAttendee(id, userId);
-      res.status(HTTP_STATUS.OK).json({ success: true, message: 'Attendee removed successfully' });
+      const { classId } = req.params;
+      const events = await eventService.getEventsByClass(parseInt(classId));
+      res.json(events);
     } catch (error) {
-      console.error('Remove attendee error:', error);
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Failed to remove attendee' });
+      console.error('Error getting events by class:', error);
+      res.status(500).json({ error: 'Failed to get events' });
     }
   }
 
-  // ============= Holidays =============
-  async getHolidays(req: Request, res: Response): Promise<void> {
+  async getEventsForMonth(req: Request, res: Response) {
     try {
-      const { schoolId } = req.params;
-      const { year } = req.query;
-      const holidays = await eventService.getHolidays(schoolId, year ? Number(year) : undefined);
-      res.status(HTTP_STATUS.OK).json({ success: true, data: holidays });
+      const { schoolId, year, month } = req.query;
+      const events = await eventService.getEventsForMonth(
+        schoolId as string,
+        parseInt(year as string),
+        parseInt(month as string)
+      );
+      res.json(events);
     } catch (error) {
-      console.error('Get holidays error:', error);
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Failed to fetch holidays' });
-    }
-  }
-
-  async createHoliday(req: Request, res: Response): Promise<void> {
-    try {
-      const holiday = await eventService.createHoliday(req.body);
-      res.status(HTTP_STATUS.CREATED).json({ success: true, data: holiday });
-    } catch (error) {
-      console.error('Create holiday error:', error);
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Failed to create holiday' });
-    }
-  }
-
-  async updateHoliday(req: Request, res: Response): Promise<void> {
-    try {
-      const { id } = req.params;
-      const holiday = await eventService.updateHoliday(id, req.body);
-      res.status(HTTP_STATUS.OK).json({ success: true, data: holiday });
-    } catch (error) {
-      console.error('Update holiday error:', error);
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Failed to update holiday' });
-    }
-  }
-
-  async deleteHoliday(req: Request, res: Response): Promise<void> {
-    try {
-      const { id } = req.params;
-      await eventService.deleteHoliday(id);
-      res.status(HTTP_STATUS.OK).json({ success: true, message: 'Holiday deleted successfully' });
-    } catch (error) {
-      console.error('Delete holiday error:', error);
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Failed to delete holiday' });
-    }
-  }
-
-  // ============= Academic Calendar =============
-  async getAcademicCalendar(req: Request, res: Response): Promise<void> {
-    try {
-      const { schoolId } = req.params;
-      const calendar = await eventService.getAcademicCalendar(schoolId);
-      res.status(HTTP_STATUS.OK).json({ success: true, data: calendar });
-    } catch (error) {
-      console.error('Get academic calendar error:', error);
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Failed to fetch academic calendar' });
-    }
-  }
-
-  async createAcademicCalendar(req: Request, res: Response): Promise<void> {
-    try {
-      const calendar = await eventService.createAcademicCalendar(req.body);
-      res.status(HTTP_STATUS.CREATED).json({ success: true, data: calendar });
-    } catch (error) {
-      console.error('Create academic calendar error:', error);
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Failed to create academic calendar' });
-    }
-  }
-
-  async updateAcademicCalendar(req: Request, res: Response): Promise<void> {
-    try {
-      const { id } = req.params;
-      const calendar = await eventService.updateAcademicCalendar(id, req.body);
-      res.status(HTTP_STATUS.OK).json({ success: true, data: calendar });
-    } catch (error) {
-      console.error('Update academic calendar error:', error);
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Failed to update academic calendar' });
-    }
-  }
-
-  async addTerm(req: Request, res: Response): Promise<void> {
-    try {
-      const { calendarId } = req.params;
-      const term = await eventService.addTerm(calendarId, req.body);
-      res.status(HTTP_STATUS.CREATED).json({ success: true, data: term });
-    } catch (error) {
-      console.error('Add term error:', error);
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Failed to add term' });
-    }
-  }
-
-  async updateTerm(req: Request, res: Response): Promise<void> {
-    try {
-      const { id } = req.params;
-      const term = await eventService.updateTerm(id, req.body);
-      res.status(HTTP_STATUS.OK).json({ success: true, data: term });
-    } catch (error) {
-      console.error('Update term error:', error);
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Failed to update term' });
-    }
-  }
-
-  async deleteTerm(req: Request, res: Response): Promise<void> {
-    try {
-      const { id } = req.params;
-      await eventService.deleteTerm(id);
-      res.status(HTTP_STATUS.OK).json({ success: true, message: 'Term deleted successfully' });
-    } catch (error) {
-      console.error('Delete term error:', error);
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Failed to delete term' });
-    }
-  }
-
-  // ============= Upcoming Events =============
-  async getUpcomingEvents(req: Request, res: Response): Promise<void> {
-    try {
-      const { schoolId } = req.params;
-      const { days } = req.query;
-      const events = await eventService.getUpcomingEvents(schoolId, days ? Number(days) : 7);
-      res.status(HTTP_STATUS.OK).json({ success: true, data: events });
-    } catch (error) {
-      console.error('Get upcoming events error:', error);
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Failed to fetch upcoming events' });
+      console.error('Error getting events for month:', error);
+      res.status(500).json({ error: 'Failed to get events' });
     }
   }
 }

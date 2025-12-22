@@ -1,297 +1,263 @@
 import { Request, Response } from 'express';
 import { userService } from '../services/user.service';
-import { HTTP_STATUS } from '@workspace/shared/constants';
-import { UserRole } from '@workspace/shared/types';
+import { UserSex } from '@prisma/client';
 
 export class UserController {
-  // ============= Teachers =============
-  async getTeachers(req: Request, res: Response): Promise<void> {
+  // Students
+  async getStudents(req: Request, res: Response) {
     try {
-      const { schoolId } = req.params;
-      const { page = 1, limit = 10, search } = req.query;
-      
-      const result = await userService.getTeachers(
-        schoolId,
-        Number(page),
-        Number(limit),
-        search as string
-      );
-      
-      res.status(HTTP_STATUS.OK).json({ success: true, ...result });
-    } catch (error) {
-      console.error('Get teachers error:', error);
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
-        success: false,
-        error: 'Failed to fetch teachers',
+      const { schoolId, classId, gradeId, search } = req.query;
+      const students = await userService.getStudents(schoolId as string, {
+        classId: classId ? parseInt(classId as string) : undefined,
+        gradeId: gradeId ? parseInt(gradeId as string) : undefined,
+        search: search as string,
       });
+      res.json(students);
+    } catch (error) {
+      console.error('Error getting students:', error);
+      res.status(500).json({ error: 'Failed to get students' });
     }
   }
 
-  async getTeacher(req: Request, res: Response): Promise<void> {
-    try {
-      const { id } = req.params;
-      const teacher = await userService.getTeacherById(id);
-      
-      if (!teacher) {
-        res.status(HTTP_STATUS.NOT_FOUND).json({
-          success: false,
-          error: 'Teacher not found',
-        });
-        return;
-      }
-      
-      res.status(HTTP_STATUS.OK).json({ success: true, data: teacher });
-    } catch (error) {
-      console.error('Get teacher error:', error);
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
-        success: false,
-        error: 'Failed to fetch teacher',
-      });
-    }
-  }
-
-  async createTeacher(req: Request, res: Response): Promise<void> {
-    try {
-      const teacher = await userService.createTeacher(req.body);
-      res.status(HTTP_STATUS.CREATED).json({ success: true, data: teacher });
-    } catch (error) {
-      console.error('Create teacher error:', error);
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
-        success: false,
-        error: 'Failed to create teacher',
-      });
-    }
-  }
-
-  async updateTeacher(req: Request, res: Response): Promise<void> {
-    try {
-      const { id } = req.params;
-      const teacher = await userService.updateTeacher(id, req.body);
-      res.status(HTTP_STATUS.OK).json({ success: true, data: teacher });
-    } catch (error) {
-      console.error('Update teacher error:', error);
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
-        success: false,
-        error: 'Failed to update teacher',
-      });
-    }
-  }
-
-  async deleteTeacher(req: Request, res: Response): Promise<void> {
-    try {
-      const { id } = req.params;
-      await userService.deleteTeacher(id);
-      res.status(HTTP_STATUS.OK).json({ success: true, message: 'Teacher deleted' });
-    } catch (error) {
-      console.error('Delete teacher error:', error);
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
-        success: false,
-        error: 'Failed to delete teacher',
-      });
-    }
-  }
-
-  // ============= Students =============
-  async getStudents(req: Request, res: Response): Promise<void> {
-    try {
-      const { schoolId } = req.params;
-      const { page = 1, limit = 10, search, classId, gradeId } = req.query;
-      
-      const result = await userService.getStudents(
-        schoolId,
-        Number(page),
-        Number(limit),
-        search as string,
-        classId ? Number(classId) : undefined,
-        gradeId ? Number(gradeId) : undefined
-      );
-      
-      res.status(HTTP_STATUS.OK).json({ success: true, ...result });
-    } catch (error) {
-      console.error('Get students error:', error);
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
-        success: false,
-        error: 'Failed to fetch students',
-      });
-    }
-  }
-
-  async getStudent(req: Request, res: Response): Promise<void> {
+  async getStudentById(req: Request, res: Response) {
     try {
       const { id } = req.params;
       const student = await userService.getStudentById(id);
-      
       if (!student) {
-        res.status(HTTP_STATUS.NOT_FOUND).json({
-          success: false,
-          error: 'Student not found',
-        });
-        return;
+        return res.status(404).json({ error: 'Student not found' });
       }
-      
-      res.status(HTTP_STATUS.OK).json({ success: true, data: student });
+      res.json(student);
     } catch (error) {
-      console.error('Get student error:', error);
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
-        success: false,
-        error: 'Failed to fetch student',
-      });
+      console.error('Error getting student:', error);
+      res.status(500).json({ error: 'Failed to get student' });
     }
   }
 
-  async createStudent(req: Request, res: Response): Promise<void> {
+  async createStudent(req: Request, res: Response) {
     try {
-      const student = await userService.createStudent(req.body);
-      res.status(HTTP_STATUS.CREATED).json({ success: true, data: student });
-    } catch (error) {
-      console.error('Create student error:', error);
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
-        success: false,
-        error: 'Failed to create student',
+      const student = await userService.createStudent({
+        ...req.body,
+        birthday: new Date(req.body.birthday),
+        gradeId: parseInt(req.body.gradeId),
+        classId: parseInt(req.body.classId),
+        sex: req.body.sex as UserSex,
       });
+      res.status(201).json(student);
+    } catch (error) {
+      console.error('Error creating student:', error);
+      res.status(500).json({ error: 'Failed to create student' });
     }
   }
 
-  async updateStudent(req: Request, res: Response): Promise<void> {
+  async updateStudent(req: Request, res: Response) {
     try {
       const { id } = req.params;
-      const student = await userService.updateStudent(id, req.body);
-      res.status(HTTP_STATUS.OK).json({ success: true, data: student });
+      const data = { ...req.body };
+      if (data.birthday) data.birthday = new Date(data.birthday);
+      if (data.gradeId) data.gradeId = parseInt(data.gradeId);
+      if (data.classId) data.classId = parseInt(data.classId);
+      
+      const student = await userService.updateStudent(id, data);
+      res.json(student);
     } catch (error) {
-      console.error('Update student error:', error);
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
-        success: false,
-        error: 'Failed to update student',
-      });
+      console.error('Error updating student:', error);
+      res.status(500).json({ error: 'Failed to update student' });
     }
   }
 
-  async deleteStudent(req: Request, res: Response): Promise<void> {
+  async deleteStudent(req: Request, res: Response) {
     try {
       const { id } = req.params;
       await userService.deleteStudent(id);
-      res.status(HTTP_STATUS.OK).json({ success: true, message: 'Student deleted' });
+      res.status(204).send();
     } catch (error) {
-      console.error('Delete student error:', error);
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
-        success: false,
-        error: 'Failed to delete student',
-      });
+      console.error('Error deleting student:', error);
+      res.status(500).json({ error: 'Failed to delete student' });
     }
   }
 
-  // ============= Parents =============
-  async getParents(req: Request, res: Response): Promise<void> {
+  // Teachers
+  async getTeachers(req: Request, res: Response) {
     try {
-      const { schoolId } = req.params;
-      const { page = 1, limit = 10, search } = req.query;
-      
-      const result = await userService.getParents(
-        schoolId,
-        Number(page),
-        Number(limit),
-        search as string
-      );
-      
-      res.status(HTTP_STATUS.OK).json({ success: true, ...result });
-    } catch (error) {
-      console.error('Get parents error:', error);
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
-        success: false,
-        error: 'Failed to fetch parents',
+      const { schoolId, subjectId, search } = req.query;
+      const teachers = await userService.getTeachers(schoolId as string, {
+        subjectId: subjectId ? parseInt(subjectId as string) : undefined,
+        search: search as string,
       });
+      res.json(teachers);
+    } catch (error) {
+      console.error('Error getting teachers:', error);
+      res.status(500).json({ error: 'Failed to get teachers' });
     }
   }
 
-  async getParent(req: Request, res: Response): Promise<void> {
+  async getTeacherById(req: Request, res: Response) {
+    try {
+      const { id } = req.params;
+      const teacher = await userService.getTeacherById(id);
+      if (!teacher) {
+        return res.status(404).json({ error: 'Teacher not found' });
+      }
+      res.json(teacher);
+    } catch (error) {
+      console.error('Error getting teacher:', error);
+      res.status(500).json({ error: 'Failed to get teacher' });
+    }
+  }
+
+  async createTeacher(req: Request, res: Response) {
+    try {
+      const teacher = await userService.createTeacher({
+        ...req.body,
+        birthday: new Date(req.body.birthday),
+        sex: req.body.sex as UserSex,
+      });
+      res.status(201).json(teacher);
+    } catch (error) {
+      console.error('Error creating teacher:', error);
+      res.status(500).json({ error: 'Failed to create teacher' });
+    }
+  }
+
+  async updateTeacher(req: Request, res: Response) {
+    try {
+      const { id } = req.params;
+      const data = { ...req.body };
+      if (data.birthday) data.birthday = new Date(data.birthday);
+      
+      const teacher = await userService.updateTeacher(id, data);
+      res.json(teacher);
+    } catch (error) {
+      console.error('Error updating teacher:', error);
+      res.status(500).json({ error: 'Failed to update teacher' });
+    }
+  }
+
+  async deleteTeacher(req: Request, res: Response) {
+    try {
+      const { id } = req.params;
+      await userService.deleteTeacher(id);
+      res.status(204).send();
+    } catch (error) {
+      console.error('Error deleting teacher:', error);
+      res.status(500).json({ error: 'Failed to delete teacher' });
+    }
+  }
+
+  // Parents
+  async getParents(req: Request, res: Response) {
+    try {
+      const { schoolId, search } = req.query;
+      const parents = await userService.getParents(schoolId as string, search as string);
+      res.json(parents);
+    } catch (error) {
+      console.error('Error getting parents:', error);
+      res.status(500).json({ error: 'Failed to get parents' });
+    }
+  }
+
+  async getParentById(req: Request, res: Response) {
     try {
       const { id } = req.params;
       const parent = await userService.getParentById(id);
-      
       if (!parent) {
-        res.status(HTTP_STATUS.NOT_FOUND).json({
-          success: false,
-          error: 'Parent not found',
-        });
-        return;
+        return res.status(404).json({ error: 'Parent not found' });
       }
-      
-      res.status(HTTP_STATUS.OK).json({ success: true, data: parent });
+      res.json(parent);
     } catch (error) {
-      console.error('Get parent error:', error);
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
-        success: false,
-        error: 'Failed to fetch parent',
-      });
+      console.error('Error getting parent:', error);
+      res.status(500).json({ error: 'Failed to get parent' });
     }
   }
 
-  async createParent(req: Request, res: Response): Promise<void> {
+  async createParent(req: Request, res: Response) {
     try {
       const parent = await userService.createParent(req.body);
-      res.status(HTTP_STATUS.CREATED).json({ success: true, data: parent });
+      res.status(201).json(parent);
     } catch (error) {
-      console.error('Create parent error:', error);
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
-        success: false,
-        error: 'Failed to create parent',
-      });
+      console.error('Error creating parent:', error);
+      res.status(500).json({ error: 'Failed to create parent' });
     }
   }
 
-  async updateParent(req: Request, res: Response): Promise<void> {
+  async updateParent(req: Request, res: Response) {
     try {
       const { id } = req.params;
       const parent = await userService.updateParent(id, req.body);
-      res.status(HTTP_STATUS.OK).json({ success: true, data: parent });
+      res.json(parent);
     } catch (error) {
-      console.error('Update parent error:', error);
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
-        success: false,
-        error: 'Failed to update parent',
-      });
+      console.error('Error updating parent:', error);
+      res.status(500).json({ error: 'Failed to update parent' });
     }
   }
 
-  async deleteParent(req: Request, res: Response): Promise<void> {
+  async deleteParent(req: Request, res: Response) {
     try {
       const { id } = req.params;
       await userService.deleteParent(id);
-      res.status(HTTP_STATUS.OK).json({ success: true, message: 'Parent deleted' });
+      res.status(204).send();
     } catch (error) {
-      console.error('Delete parent error:', error);
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
-        success: false,
-        error: 'Failed to delete parent',
-      });
+      console.error('Error deleting parent:', error);
+      res.status(500).json({ error: 'Failed to delete parent' });
     }
   }
 
-  // ============= Admins =============
-  async getAdmins(req: Request, res: Response): Promise<void> {
+  // Admins
+  async getAdmins(req: Request, res: Response) {
     try {
-      const { schoolId } = req.params;
-      const admins = await userService.getAdmins(schoolId);
-      res.status(HTTP_STATUS.OK).json({ success: true, data: admins });
+      const { schoolId } = req.query;
+      const admins = await userService.getAdmins(schoolId as string);
+      res.json(admins);
     } catch (error) {
-      console.error('Get admins error:', error);
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
-        success: false,
-        error: 'Failed to fetch admins',
-      });
+      console.error('Error getting admins:', error);
+      res.status(500).json({ error: 'Failed to get admins' });
     }
   }
 
-  async createAdmin(req: Request, res: Response): Promise<void> {
+  async getAdminById(req: Request, res: Response) {
+    try {
+      const { id } = req.params;
+      const admin = await userService.getAdminById(id);
+      if (!admin) {
+        return res.status(404).json({ error: 'Admin not found' });
+      }
+      res.json(admin);
+    } catch (error) {
+      console.error('Error getting admin:', error);
+      res.status(500).json({ error: 'Failed to get admin' });
+    }
+  }
+
+  async createAdmin(req: Request, res: Response) {
     try {
       const admin = await userService.createAdmin(req.body);
-      res.status(HTTP_STATUS.CREATED).json({ success: true, data: admin });
+      res.status(201).json(admin);
     } catch (error) {
-      console.error('Create admin error:', error);
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
-        success: false,
-        error: 'Failed to create admin',
-      });
+      console.error('Error creating admin:', error);
+      res.status(500).json({ error: 'Failed to create admin' });
+    }
+  }
+
+  async deleteAdmin(req: Request, res: Response) {
+    try {
+      const { id } = req.params;
+      await userService.deleteAdmin(id);
+      res.status(204).send();
+    } catch (error) {
+      console.error('Error deleting admin:', error);
+      res.status(500).json({ error: 'Failed to delete admin' });
+    }
+  }
+
+  // User counts
+  async getUserCounts(req: Request, res: Response) {
+    try {
+      const { schoolId } = req.params;
+      const counts = await userService.getUserCounts(schoolId);
+      res.json(counts);
+    } catch (error) {
+      console.error('Error getting user counts:', error);
+      res.status(500).json({ error: 'Failed to get user counts' });
     }
   }
 }

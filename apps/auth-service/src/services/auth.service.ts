@@ -1,352 +1,255 @@
-import prisma from '../lib/prisma';
-import { hashPassword, comparePassword, signToken, verifyToken as verifyJWT, generateSecureToken } from '@workspace/auth';
-import { LoginRequest, TokenPayload, UserRole } from '@workspace/shared/types';
-import { generateOTP } from '@workspace/shared/utils';
-import { DEFAULTS } from '@workspace/shared/constants';
+import { PrismaClient } from '@prisma/client';
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
+
+const prisma = new PrismaClient();
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
+
+export enum UserRole {
+  ADMIN = 'admin',
+  TEACHER = 'teacher',
+  STUDENT = 'student',
+  PARENT = 'parent',
+  MANAGER = 'manager',
+  SUPER_ADMIN = 'super_admin',
+}
 
 export class AuthService {
-  /**
-   * Login user (any role)
-   */
-  async login(data: LoginRequest): Promise<any> {
-    const { username, password, role } = data;
+  // Login for school users (admin, teacher, student, parent)
+  async login(username: string, password: string, schoolSlug?: string) {
+    let user = null;
+    let role = '';
+    let schoolId = '';
 
-    let user: any = null;
-    let userRole: UserRole;
-    let schoolId: string | undefined;
-
-    // Determine which table to query based on role or try all
-    if (role === UserRole.SUPER_ADMIN || !role) {
-      user = await prisma.superAdmin.findUnique({ where: { email: username } });
-      if (user) {
-        userRole = UserRole.SUPER_ADMIN;
-        schoolId = undefined;
+    // Try Admin
+    const admin = await prisma.admin.findFirst({
+      where: { username },
+      include: { school: true },
+    });
+    if (admin) {
+      const isValid = await bcrypt.compare(password, admin.password);
+      if (isValid) {
+        user = admin;
+        role = UserRole.ADMIN;
+        schoolId = admin.schoolId;
       }
     }
 
-    if (!user && (role === UserRole.MANAGER || !role)) {
-      user = await prisma.schoolManager.findUnique({ where: { email: username } });
-      if (user) {
-        userRole = UserRole.MANAGER;
-        schoolId = undefined;
+    // Try Teacher
+    if (!user) {
+      const teacher = await prisma.teacher.findFirst({
+        where: { username },
+        include: { school: true },
+      });
+      if (teacher) {
+        const isValid = await bcrypt.compare(password, teacher.password);
+        if (isValid) {
+          user = teacher;
+          role = UserRole.TEACHER;
+          schoolId = teacher.schoolId;
+        }
       }
     }
 
-    if (!user && (role === UserRole.ADMIN || !role)) {
-      user = await prisma.admin.findUnique({ where: { username } });
-      if (user) {
-        userRole = UserRole.ADMIN;
-        schoolId = user.schoolId;
+    // Try Student
+    if (!user) {
+      const student = await prisma.student.findFirst({
+        where: { username },
+        include: { school: true },
+      });
+      if (student) {
+        const isValid = await bcrypt.compare(password, student.password);
+        if (isValid) {
+          user = student;
+          role = UserRole.STUDENT;
+          schoolId = student.schoolId;
+        }
       }
     }
 
-    if (!user && (role === UserRole.TEACHER || !role)) {
-      user = await prisma.teacher.findUnique({ where: { username } });
-      if (user) {
-        userRole = UserRole.TEACHER;
-        schoolId = user.schoolId;
-      }
-    }
-
-    if (!user && (role === UserRole.STUDENT || !role)) {
-      user = await prisma.student.findUnique({ where: { username } });
-      if (user) {
-        userRole = UserRole.STUDENT;
-        schoolId = user.schoolId;
-      }
-    }
-
-    if (!user && (role === UserRole.PARENT || !role)) {
-      user = await prisma.parent.findUnique({ where: { username } });
-      if (user) {
-        userRole = UserRole.PARENT;
-        schoolId = user.schoolId;
+    // Try Parent
+    if (!user) {
+      const parent = await prisma.parent.findFirst({
+        where: { username },
+        include: { school: true },
+      });
+      if (parent) {
+        const isValid = await bcrypt.compare(password, parent.password);
+        if (isValid) {
+          user = parent;
+          role = UserRole.PARENT;
+          schoolId = parent.schoolId;
+        }
       }
     }
 
     if (!user) {
-      return {
-        success: false,
-        error: 'Invalid credentials',
-      };
+      throw new Error('Invalid credentials');
     }
 
-    // Verify password
-    const isValidPassword = await comparePassword(password, user.password);
-    if (!isValidPassword) {
-      return {
-        success: false,
-        error: 'Invalid credentials',
-      };
+    // Verify school slug if provided
+    if (schoolSlug && (user as any).school?.slug !== schoolSlug) {
+      throw new Error('Invalid school access');
     }
 
-    // Generate JWT token
-    const tokenPayload: Omit<TokenPayload, 'iat' | 'exp'> = {
-      id: user.id,
-      username: user.username || user.email,
-      role: userRole!,
+    const token = this.generateToken({
+      userId: user.id,
+      username: user.username,
+      role,
       schoolId,
-    };
-
-    const token = signToken(tokenPayload);
+      schoolSlug: (user as any).school?.slug,
+    });
 
     return {
-      success: true,
       token,
       user: {
         id: user.id,
-        username: user.username || user.email,
-        role: userRole!,
+        username: user.username,
+        role,
         schoolId,
-        name: user.name,
+        schoolName: (user as any).school?.name,
+        schoolSlug: (user as any).school?.slug,
       },
     };
   }
 
-  /**
-   * Request password reset (send OTP)
-   */
-  async requestPasswordReset(email: string): Promise<void> {
-    // Check if user exists (any role with email)
-    const superAdmin = await prisma.superAdmin.findUnique({ where: { email } });
-    const manager = await prisma.schoolManager.findUnique({ where: { email } });
-
-    if (!superAdmin && !manager) {
-      // Don't reveal if user exists or not
-      return;
-    }
-
-    // Generate OTP
-    const otp = generateOTP(DEFAULTS.OTP_LENGTH);
-    const expiresAt = new Date(Date.now() + DEFAULTS.OTP_EXPIRES_IN);
-
-    // Save OTP to database
-    await prisma.passwordResetToken.create({
-      data: {
-        email,
-        otp,
-        expiresAt,
-      },
-    });
-
-    // TODO: Send OTP via email (integrate with email service)
-    console.log(`Password reset OTP for ${email}: ${otp}`);
-  }
-
-  /**
-   * Verify OTP
-   */
-  async verifyOTP(email: string, otp: string): Promise<boolean> {
-    const token = await prisma.passwordResetToken.findFirst({
-      where: {
-        email,
-        otp,
-        used: false,
-        expiresAt: {
-          gt: new Date(),
+  // Login for school managers
+  async managerLogin(email: string, password: string) {
+    const manager = await prisma.schoolManager.findFirst({
+      where: { email },
+      include: {
+        schools: {
+          include: { school: true },
         },
       },
     });
 
-    return !!token;
+    if (!manager) {
+      throw new Error('Invalid credentials');
+    }
+
+    const isValid = await bcrypt.compare(password, manager.password);
+    if (!isValid) {
+      throw new Error('Invalid credentials');
+    }
+
+    const token = this.generateToken({
+      userId: manager.id,
+      email: manager.email,
+      role: UserRole.MANAGER,
+      name: manager.name,
+    });
+
+    return {
+      token,
+      manager: {
+        id: manager.id,
+        name: manager.name,
+        email: manager.email,
+        schools: manager.schools.map((m) => ({
+          id: m.school.id,
+          name: m.school.name,
+          slug: m.school.slug,
+          role: m.role,
+        })),
+      },
+    };
   }
 
-  /**
-   * Reset password with OTP
-   */
-  async resetPassword(email: string, otp: string, newPassword: string): Promise<boolean> {
-    // Verify OTP
-    const token = await prisma.passwordResetToken.findFirst({
+  // Login for super admin
+  async superAdminLogin(email: string, password: string) {
+    const superAdmin = await prisma.superAdmin.findFirst({
+      where: { email },
+    });
+
+    if (!superAdmin) {
+      throw new Error('Invalid credentials');
+    }
+
+    const isValid = await bcrypt.compare(password, superAdmin.password);
+    if (!isValid) {
+      throw new Error('Invalid credentials');
+    }
+
+    const token = this.generateToken({
+      userId: superAdmin.id,
+      email: superAdmin.email,
+      role: UserRole.SUPER_ADMIN,
+      name: superAdmin.name,
+    });
+
+    return {
+      token,
+      superAdmin: {
+        id: superAdmin.id,
+        name: superAdmin.name,
+        email: superAdmin.email,
+      },
+    };
+  }
+
+  // Request password reset
+  async requestPasswordReset(email: string) {
+    const teacher = await prisma.teacher.findFirst({ where: { email } });
+    const student = await prisma.student.findFirst({ where: { email } });
+    const parent = await prisma.parent.findFirst({ where: { email } });
+    const manager = await prisma.schoolManager.findFirst({ where: { email } });
+
+    const user = teacher || student || parent || manager;
+    if (!user) {
+      return { success: true };
+    }
+
+    const token = Math.random().toString(36).substring(2, 15);
+    const expiresAt = new Date(Date.now() + 3600000);
+
+    await prisma.passwordResetToken.upsert({
+      where: { email },
+      update: { token, expiresAt },
+      create: { email, token, expiresAt },
+    });
+
+    console.log(`Password reset token for ${email}: ${token}`);
+    return { success: true };
+  }
+
+  // Reset password
+  async resetPassword(email: string, token: string, newPassword: string) {
+    const resetToken = await prisma.passwordResetToken.findFirst({
       where: {
         email,
-        otp,
-        used: false,
-        expiresAt: {
-          gt: new Date(),
-        },
+        token,
+        expiresAt: { gt: new Date() },
       },
     });
 
-    if (!token) {
-      return false;
+    if (!resetToken) {
+      throw new Error('Invalid or expired token');
     }
 
-    // Hash new password
-    const hashedPassword = await hashPassword(newPassword);
+    const hashedPassword = await bcrypt.hash(newPassword, 12);
 
-    // Update password in appropriate table
-    const superAdmin = await prisma.superAdmin.findUnique({ where: { email } });
-    if (superAdmin) {
-      await prisma.superAdmin.update({
-        where: { id: superAdmin.id },
-        data: { password: hashedPassword },
-      });
-    }
+    await prisma.teacher.updateMany({ where: { email }, data: { password: hashedPassword } });
+    await prisma.student.updateMany({ where: { email }, data: { password: hashedPassword } });
+    await prisma.parent.updateMany({ where: { email }, data: { password: hashedPassword } });
+    await prisma.schoolManager.updateMany({ where: { email }, data: { password: hashedPassword } });
 
-    const manager = await prisma.schoolManager.findUnique({ where: { email } });
-    if (manager) {
-      await prisma.schoolManager.update({
-        where: { id: manager.id },
-        data: { password: hashedPassword },
-      });
-    }
+    await prisma.passwordResetToken.delete({ where: { id: resetToken.id } });
 
-    // Mark OTP as used
-    await prisma.passwordResetToken.update({
-      where: { id: token.id },
-      data: { used: true },
-    });
-
-    return true;
+    return { success: true };
   }
 
-  /**
-   * Verify JWT token (for inter-service communication)
-   */
-  async verifyToken(token: string): Promise<TokenPayload | null> {
-    return verifyJWT(token);
-  }
-
-  /**
-   * Create user credentials (called by other services)
-   */
-  async createUser(data: {
-    id: string;
-    username: string;
-    password: string;
-    role: UserRole;
-    schoolId?: string;
-  }): Promise<void> {
-    const hashedPassword = await hashPassword(data.password);
-
-    switch (data.role) {
-      case UserRole.ADMIN:
-        await prisma.admin.create({
-          data: {
-            id: data.id,
-            username: data.username,
-            password: hashedPassword,
-            schoolId: data.schoolId!,
-          },
-        });
-        break;
-
-      case UserRole.TEACHER:
-        await prisma.teacher.create({
-          data: {
-            id: data.id,
-            username: data.username,
-            password: hashedPassword,
-            schoolId: data.schoolId!,
-          },
-        });
-        break;
-
-      case UserRole.STUDENT:
-        await prisma.student.create({
-          data: {
-            id: data.id,
-            username: data.username,
-            password: hashedPassword,
-            schoolId: data.schoolId!,
-          },
-        });
-        break;
-
-      case UserRole.PARENT:
-        await prisma.parent.create({
-          data: {
-            id: data.id,
-            username: data.username,
-            password: hashedPassword,
-            schoolId: data.schoolId!,
-          },
-        });
-        break;
-
-      default:
-        throw new Error(`Unsupported user role: ${data.role}`);
+  // Verify token
+  verifyToken(token: string) {
+    try {
+      return jwt.verify(token, JWT_SECRET);
+    } catch {
+      return null;
     }
   }
 
-  /**
-   * Update user password
-   */
-  async updatePassword(id: string, role: UserRole, newPassword: string): Promise<void> {
-    const hashedPassword = await hashPassword(newPassword);
-
-    switch (role) {
-      case UserRole.ADMIN:
-        await prisma.admin.update({
-          where: { id },
-          data: { password: hashedPassword },
-        });
-        break;
-
-      case UserRole.TEACHER:
-        await prisma.teacher.update({
-          where: { id },
-          data: { password: hashedPassword },
-        });
-        break;
-
-      case UserRole.STUDENT:
-        await prisma.student.update({
-          where: { id },
-          data: { password: hashedPassword },
-        });
-        break;
-
-      case UserRole.PARENT:
-        await prisma.parent.update({
-          where: { id },
-          data: { password: hashedPassword },
-        });
-        break;
-
-      case UserRole.SUPER_ADMIN:
-        await prisma.superAdmin.update({
-          where: { id },
-          data: { password: hashedPassword },
-        });
-        break;
-
-      case UserRole.MANAGER:
-        await prisma.schoolManager.update({
-          where: { id },
-          data: { password: hashedPassword },
-        });
-        break;
-
-      default:
-        throw new Error(`Unsupported user role: ${role}`);
-    }
-  }
-
-  /**
-   * Delete user credentials
-   */
-  async deleteUser(id: string, role: UserRole): Promise<void> {
-    switch (role) {
-      case UserRole.ADMIN:
-        await prisma.admin.delete({ where: { id } });
-        break;
-
-      case UserRole.TEACHER:
-        await prisma.teacher.delete({ where: { id } });
-        break;
-
-      case UserRole.STUDENT:
-        await prisma.student.delete({ where: { id } });
-        break;
-
-      case UserRole.PARENT:
-        await prisma.parent.delete({ where: { id } });
-        break;
-
-      default:
-        throw new Error(`Unsupported user role: ${role}`);
-    }
+  private generateToken(payload: any) {
+    return jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' });
   }
 }
 

@@ -4,31 +4,28 @@ import { communicationController } from '../controllers/communication.controller
 const router = Router();
 
 // Notifications
-router.get('/users/:userId/:userRole/notifications', communicationController.getNotifications.bind(communicationController));
-router.get('/users/:userId/:userRole/notifications/unread-count', communicationController.getUnreadCount.bind(communicationController));
-router.post('/notifications', communicationController.createNotification.bind(communicationController));
-router.post('/notifications/bulk', communicationController.createBulkNotifications.bind(communicationController));
-router.patch('/notifications/:id/read', communicationController.markAsRead.bind(communicationController));
-router.patch('/users/:userId/:userRole/notifications/read-all', communicationController.markAllAsRead.bind(communicationController));
-router.delete('/notifications/:id', communicationController.deleteNotification.bind(communicationController));
+router.get('/notifications', (req, res) => communicationController.getNotifications(req, res));
+router.post('/notifications', (req, res) => communicationController.createNotification(req, res));
+router.patch('/notifications/:id/read', (req, res) => communicationController.markNotificationAsRead(req, res));
+router.delete('/notifications/:id', (req, res) => communicationController.deleteNotification(req, res));
+router.get('/notifications/unread/count', (req, res) => communicationController.getUnreadCount(req, res));
 
 // Messages
-router.get('/users/:userId/:userRole/messages', communicationController.getMessages.bind(communicationController));
-router.get('/conversations', communicationController.getConversation.bind(communicationController));
-router.post('/messages', communicationController.sendMessage.bind(communicationController));
-router.patch('/messages/:id/read', communicationController.markMessageAsRead.bind(communicationController));
-router.delete('/messages/:id', communicationController.deleteMessage.bind(communicationController));
+router.get('/messages', (req, res) => communicationController.getMessages(req, res));
+router.get('/messages/:id', (req, res) => communicationController.getMessageById(req, res));
+router.post('/messages', (req, res) => communicationController.sendMessage(req, res));
+router.patch('/messages/:id/read', (req, res) => communicationController.markMessageAsRead(req, res));
+router.delete('/messages/:id', (req, res) => communicationController.deleteMessage(req, res));
 
 // Announcements
-router.get('/schools/:schoolId/announcements', communicationController.getAnnouncements.bind(communicationController));
-router.post('/announcements', communicationController.createAnnouncement.bind(communicationController));
-router.put('/announcements/:id', communicationController.updateAnnouncement.bind(communicationController));
-router.delete('/announcements/:id', communicationController.deleteAnnouncement.bind(communicationController));
+router.get('/announcements', (req, res) => communicationController.getAnnouncements(req, res));
+router.post('/announcements', (req, res) => communicationController.createAnnouncement(req, res));
+router.put('/announcements/:id', (req, res) => communicationController.updateAnnouncement(req, res));
+router.delete('/announcements/:id', (req, res) => communicationController.deleteAnnouncement(req, res));
 
-// Email Templates
-router.get('/schools/:schoolId/email-templates', communicationController.getEmailTemplates.bind(communicationController));
-router.post('/email-templates', communicationController.createEmailTemplate.bind(communicationController));
-router.put('/email-templates/:id', communicationController.updateEmailTemplate.bind(communicationController));
-router.delete('/email-templates/:id', communicationController.deleteEmailTemplate.bind(communicationController));
+// Global Announcements
+router.get('/global-announcements', (req, res) => communicationController.getGlobalAnnouncements(req, res));
+router.post('/global-announcements', (req, res) => communicationController.createGlobalAnnouncement(req, res));
+router.delete('/global-announcements/:id', (req, res) => communicationController.deleteGlobalAnnouncement(req, res));
 
 export default router;

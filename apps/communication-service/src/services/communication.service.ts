@@ -1,15 +1,13 @@
-import prisma from '../lib/prisma';
+import { PrismaClient } from '@prisma/client';
+
+const prisma = new PrismaClient();
 
 export class CommunicationService {
-  // ============= Notifications =============
-  async getNotifications(userId: string, userRole: string, unreadOnly = false) {
-    const where: any = { userId, userRole };
-    if (unreadOnly) where.read = false;
-    
+  // Notifications
+  async getNotifications(userId: string, userRole: string) {
     return prisma.notification.findMany({
-      where,
+      where: { userId, userRole },
       orderBy: { createdAt: 'desc' },
-      take: 50,
     });
   }
 
@@ -20,33 +18,22 @@ export class CommunicationService {
     userId: string;
     userRole: string;
     schoolId: string;
-    link?: string;
   }) {
-    return prisma.notification.create({ data });
-  }
-
-  async createBulkNotifications(notifications: Array<{
-    title: string;
-    message: string;
-    type: string;
-    userId: string;
-    userRole: string;
-    schoolId: string;
-    link?: string;
-  }>) {
-    return prisma.notification.createMany({ data: notifications });
-  }
-
-  async markAsRead(id: number) {
-    return prisma.notification.update({
-      where: { id },
-      data: { read: true },
+    return prisma.notification.create({
+      data: {
+        title: data.title,
+        message: data.message,
+        type: data.type,
+        userId: data.userId,
+        userRole: data.userRole,
+        school: { connect: { id: data.schoolId } },
+      },
     });
   }
 
-  async markAllAsRead(userId: string, userRole: string) {
-    return prisma.notification.updateMany({
-      where: { userId, userRole, read: false },
+  async markNotificationAsRead(id: number) {
+    return prisma.notification.update({
+      where: { id },
       data: { read: true },
     });
   }
@@ -55,114 +42,99 @@ export class CommunicationService {
     return prisma.notification.delete({ where: { id } });
   }
 
-  async getUnreadCount(userId: string, userRole: string) {
+  async getUnreadNotificationsCount(userId: string, userRole: string) {
     return prisma.notification.count({
       where: { userId, userRole, read: false },
     });
   }
 
-  // ============= Messages =============
-  async getMessages(userId: string, userRole: string, page = 1, limit = 20) {
-    const skip = (page - 1) * limit;
-    
-    const [messages, total] = await Promise.all([
-      prisma.message.findMany({
-        where: {
-          OR: [
-            { senderId: userId, senderRole: userRole },
-            { receiverId: userId, receiverRole: userRole },
-          ],
-        },
-        skip,
-        take: limit,
-        orderBy: { createdAt: 'desc' },
-      }),
-      prisma.message.count({
-        where: {
-          OR: [
-            { senderId: userId, senderRole: userRole },
-            { receiverId: userId, receiverRole: userRole },
-          ],
-        },
-      }),
-    ]);
-    
-    return {
-      data: messages,
-      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
-    };
-  }
-
-  async getConversation(userId1: string, role1: string, userId2: string, role2: string) {
+  // Messages
+  async getMessages(userId: string, userRole: string) {
     return prisma.message.findMany({
       where: {
         OR: [
-          { senderId: userId1, senderRole: role1, receiverId: userId2, receiverRole: role2 },
-          { senderId: userId2, senderRole: role2, receiverId: userId1, receiverRole: role1 },
+          { senderId: userId, senderRole: userRole },
+          { recipients: { some: { recipientId: userId, recipientRole: userRole } } },
         ],
       },
-      orderBy: { createdAt: 'asc' },
+      include: { recipients: true },
+      orderBy: { createdAt: 'desc' },
     });
   }
 
   async sendMessage(data: {
+    subject: string;
     content: string;
     senderId: string;
-    senderRole: string;
     senderName: string;
-    receiverId: string;
-    receiverRole: string;
+    senderRole: string;
     schoolId: string;
+    recipients: Array<{ recipientId: string; recipientName: string; recipientRole: string }>;
   }) {
-    return prisma.message.create({ data });
+    return prisma.message.create({
+      data: {
+        subject: data.subject,
+        content: data.content,
+        senderId: data.senderId,
+        senderName: data.senderName,
+        senderRole: data.senderRole,
+        school: { connect: { id: data.schoolId } },
+        recipients: {
+          create: data.recipients.map((r) => ({
+            recipientId: r.recipientId,
+            recipientName: r.recipientName,
+            recipientRole: r.recipientRole,
+          })),
+        },
+      },
+      include: { recipients: true },
+    });
   }
 
-  async markMessageAsRead(id: number) {
-    return prisma.message.update({
+  async getMessageById(id: number) {
+    return prisma.message.findUnique({
       where: { id },
+      include: { recipients: true },
+    });
+  }
+
+  async markMessageAsRead(messageId: number, recipientId: string) {
+    return prisma.messageRecipient.updateMany({
+      where: { messageId, recipientId },
       data: { read: true },
     });
   }
 
   async deleteMessage(id: number) {
+    await prisma.messageRecipient.deleteMany({ where: { messageId: id } });
     return prisma.message.delete({ where: { id } });
   }
 
-  // ============= Announcements =============
-  async getAnnouncements(schoolId: string, userRole?: string, classId?: number) {
-    const where: any = { schoolId };
-    if (userRole) {
-      where.targetRoles = { has: userRole };
-    }
-    if (classId) where.classId = classId;
-    
+  // Announcements
+  async getAnnouncements(schoolId: string) {
     return prisma.announcement.findMany({
-      where: {
-        ...where,
-        OR: [
-          { expiresAt: null },
-          { expiresAt: { gt: new Date() } },
-        ],
-      },
-      orderBy: [{ priority: 'desc' }, { createdAt: 'desc' }],
+      where: { schoolId },
+      include: { class: true },
+      orderBy: { date: 'desc' },
     });
   }
 
   async createAnnouncement(data: {
     title: string;
-    content: string;
-    priority?: string;
-    targetRoles: string[];
+    description: string;
+    date: Date;
     classId?: number;
     schoolId: string;
-    authorId: string;
-    authorName: string;
-    expiresAt?: Date;
   }) {
     return prisma.announcement.create({ data });
   }
 
-  async updateAnnouncement(id: number, data: any) {
+  async updateAnnouncement(id: number, data: {
+    title?: string;
+    description?: string;
+    date?: Date;
+    classId?: number;
+  }) {
     return prisma.announcement.update({ where: { id }, data });
   }
 
@@ -170,30 +142,30 @@ export class CommunicationService {
     return prisma.announcement.delete({ where: { id } });
   }
 
-  // ============= Email Templates =============
-  async getEmailTemplates(schoolId: string) {
-    return prisma.emailTemplate.findMany({
-      where: { schoolId },
-      orderBy: { name: 'asc' },
+  // Global Announcements (for super admin) - id is String UUID
+  async getGlobalAnnouncements() {
+    return prisma.globalAnnouncement.findMany({
+      where: { active: true },
+      orderBy: { createdAt: 'desc' },
     });
   }
 
-  async createEmailTemplate(data: {
-    name: string;
-    subject: string;
-    body: string;
-    variables: string[];
-    schoolId: string;
+  async createGlobalAnnouncement(data: {
+    title: string;
+    message: string;
+    type?: string;
   }) {
-    return prisma.emailTemplate.create({ data });
+    return prisma.globalAnnouncement.create({
+      data: {
+        title: data.title,
+        message: data.message,
+        type: data.type || 'INFO',
+      },
+    });
   }
 
-  async updateEmailTemplate(id: number, data: any) {
-    return prisma.emailTemplate.update({ where: { id }, data });
-  }
-
-  async deleteEmailTemplate(id: number) {
-    return prisma.emailTemplate.delete({ where: { id } });
+  async deleteGlobalAnnouncement(id: string) {
+    return prisma.globalAnnouncement.delete({ where: { id } });
   }
 }
 

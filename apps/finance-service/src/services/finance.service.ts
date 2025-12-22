@@ -1,28 +1,47 @@
-import prisma from '../lib/prisma';
+import { PrismaClient, InvoiceStatus, PaymentMethod } from '@prisma/client';
+
+const prisma = new PrismaClient();
 
 export class FinanceService {
-  // ============= Fee Structures =============
-  async getFeeStructures(schoolId: string, gradeId?: number) {
-    const where: any = { schoolId };
-    if (gradeId) where.gradeId = gradeId;
-    
-    return prisma.feeStructure.findMany({
-      where,
+  // ============= Fee Categories =============
+  async getFeeCategories(schoolId: string) {
+    return prisma.feeCategory.findMany({
+      where: { schoolId },
+      include: { feeStructures: true },
       orderBy: { name: 'asc' },
     });
   }
 
-  async createFeeStructure(data: {
-    name: string;
-    amount: number;
-    frequency: string;
-    gradeId?: number;
-    schoolId: string;
-  }) {
+  async createFeeCategory(data: { name: string; description?: string; schoolId: string }) {
+    return prisma.feeCategory.create({ data });
+  }
+
+  async updateFeeCategory(id: number, data: { name?: string; description?: string }) {
+    return prisma.feeCategory.update({ where: { id }, data });
+  }
+
+  async deleteFeeCategory(id: number) {
+    return prisma.feeCategory.delete({ where: { id } });
+  }
+
+  // ============= Fee Structures =============
+  async getFeeStructures(schoolId: string, feeCategoryId?: number, gradeId?: number) {
+    const where: any = { schoolId };
+    if (feeCategoryId) where.feeCategoryId = feeCategoryId;
+    if (gradeId) where.gradeId = gradeId;
+    
+    return prisma.feeStructure.findMany({
+      where,
+      include: { feeCategory: true, grade: true },
+      orderBy: { id: 'desc' },
+    });
+  }
+
+  async createFeeStructure(data: { amount: number; feeCategoryId: number; gradeId?: number; schoolId: string }) {
     return prisma.feeStructure.create({ data });
   }
 
-  async updateFeeStructure(id: number, data: any) {
+  async updateFeeStructure(id: number, data: { amount?: number; gradeId?: number }) {
     return prisma.feeStructure.update({ where: { id }, data });
   }
 
@@ -30,227 +49,98 @@ export class FinanceService {
     return prisma.feeStructure.delete({ where: { id } });
   }
 
-  // ============= Payments =============
-  async getPayments(schoolId: string, studentId?: string, status?: string, page = 1, limit = 10) {
-    const skip = (page - 1) * limit;
+  // ============= Student Invoices =============
+  async getStudentInvoices(schoolId: string, studentId?: string, status?: InvoiceStatus) {
     const where: any = { schoolId };
     if (studentId) where.studentId = studentId;
     if (status) where.status = status;
     
-    const [payments, total] = await Promise.all([
-      prisma.payment.findMany({
-        where,
-        skip,
-        take: limit,
-        include: { feeStructure: true },
-        orderBy: { createdAt: 'desc' },
-      }),
-      prisma.payment.count({ where }),
-    ]);
-    
-    return {
-      data: payments,
-      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
-    };
-  }
-
-  async createPayment(data: {
-    amount: number;
-    method: string;
-    status: string;
-    studentId: string;
-    feeStructureId?: number;
-    schoolId: string;
-    notes?: string;
-    transactionId?: string;
-  }) {
-    return prisma.payment.create({
-      data: {
-        ...data,
-        paidAt: data.status === 'COMPLETED' ? new Date() : null,
-      },
-      include: { feeStructure: true },
-    });
-  }
-
-  async updatePayment(id: number, data: any) {
-    if (data.status === 'COMPLETED' && !data.paidAt) {
-      data.paidAt = new Date();
-    }
-    return prisma.payment.update({
-      where: { id },
-      data,
-      include: { feeStructure: true },
-    });
-  }
-
-  async deletePayment(id: number) {
-    return prisma.payment.delete({ where: { id } });
-  }
-
-  // ============= Invoices =============
-  async getInvoices(schoolId: string, studentId?: string, status?: string, page = 1, limit = 10) {
-    const skip = (page - 1) * limit;
-    const where: any = { schoolId };
-    if (studentId) where.studentId = studentId;
-    if (status) where.status = status;
-    
-    const [invoices, total] = await Promise.all([
-      prisma.invoice.findMany({
-        where,
-        skip,
-        take: limit,
-        orderBy: { createdAt: 'desc' },
-      }),
-      prisma.invoice.count({ where }),
-    ]);
-    
-    return {
-      data: invoices,
-      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
-    };
-  }
-
-  async createInvoice(data: {
-    amount: number;
-    dueDate: Date;
-    studentId: string;
-    schoolId: string;
-    items: any[];
-  }) {
-    const invoiceNo = `INV-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
-    return prisma.invoice.create({
-      data: {
-        ...data,
-        invoiceNo,
-        status: 'PENDING',
-      },
-    });
-  }
-
-  async updateInvoice(id: number, data: any) {
-    return prisma.invoice.update({ where: { id }, data });
-  }
-
-  async deleteInvoice(id: number) {
-    return prisma.invoice.delete({ where: { id } });
-  }
-
-  // ============= Expenses =============
-  async getExpenses(schoolId: string, category?: string, status?: string, page = 1, limit = 10) {
-    const skip = (page - 1) * limit;
-    const where: any = { schoolId };
-    if (category) where.category = category;
-    if (status) where.status = status;
-    
-    const [expenses, total] = await Promise.all([
-      prisma.expense.findMany({
-        where,
-        skip,
-        take: limit,
-        orderBy: { createdAt: 'desc' },
-      }),
-      prisma.expense.count({ where }),
-    ]);
-    
-    return {
-      data: expenses,
-      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
-    };
-  }
-
-  async createExpense(data: {
-    title: string;
-    amount: number;
-    category: string;
-    description?: string;
-    receiptUrl?: string;
-    schoolId: string;
-  }) {
-    return prisma.expense.create({ data });
-  }
-
-  async updateExpense(id: number, data: any) {
-    return prisma.expense.update({ where: { id }, data });
-  }
-
-  async approveExpense(id: number, approvedBy: string) {
-    return prisma.expense.update({
-      where: { id },
-      data: { status: 'APPROVED', approvedBy },
-    });
-  }
-
-  async rejectExpense(id: number) {
-    return prisma.expense.update({
-      where: { id },
-      data: { status: 'REJECTED' },
-    });
-  }
-
-  async deleteExpense(id: number) {
-    return prisma.expense.delete({ where: { id } });
-  }
-
-  // ============= Budgets =============
-  async getBudgets(schoolId: string, category?: string) {
-    const where: any = { schoolId };
-    if (category) where.category = category;
-    
-    return prisma.budget.findMany({
+    return prisma.studentInvoice.findMany({
       where,
-      orderBy: { startDate: 'desc' },
+      include: { student: true, payments: true },
+      orderBy: { dueDate: 'desc' },
     });
   }
 
-  async createBudget(data: {
-    name: string;
-    amount: number;
-    category: string;
-    startDate: Date;
-    endDate: Date;
-    schoolId: string;
-  }) {
-    return prisma.budget.create({ data });
+  async getStudentInvoiceById(id: string) {
+    return prisma.studentInvoice.findUnique({
+      where: { id },
+      include: { student: true, payments: true },
+    });
   }
 
-  async updateBudget(id: number, data: any) {
-    return prisma.budget.update({ where: { id }, data });
+  async createStudentInvoice(data: { title: string; amount: number; dueDate: Date; studentId: string; schoolId: string }) {
+    return prisma.studentInvoice.create({
+      data: {
+        title: data.title,
+        amount: data.amount,
+        dueDate: new Date(data.dueDate),
+        status: 'PENDING',
+        studentId: data.studentId,
+        schoolId: data.schoolId,
+      },
+    });
   }
 
-  async deleteBudget(id: number) {
-    return prisma.budget.delete({ where: { id } });
+  async updateStudentInvoice(id: string, data: { title?: string; amount?: number; dueDate?: Date; status?: InvoiceStatus }) {
+    const updateData: any = { ...data };
+    if (data.dueDate) updateData.dueDate = new Date(data.dueDate);
+    return prisma.studentInvoice.update({ where: { id }, data: updateData });
   }
 
-  // ============= Reports =============
-  async getFinancialSummary(schoolId: string, startDate: Date, endDate: Date) {
-    const [payments, expenses] = await Promise.all([
-      prisma.payment.findMany({
-        where: {
-          schoolId,
-          status: 'COMPLETED',
-          paidAt: { gte: startDate, lte: endDate },
-        },
-      }),
-      prisma.expense.findMany({
-        where: {
-          schoolId,
-          status: 'APPROVED',
-          createdAt: { gte: startDate, lte: endDate },
-        },
-      }),
+  async deleteStudentInvoice(id: string) {
+    return prisma.studentInvoice.delete({ where: { id } });
+  }
+
+  // ============= Payments =============
+  async getPayments(schoolId: string, invoiceId?: string) {
+    const where: any = { schoolId };
+    if (invoiceId) where.invoiceId = invoiceId;
+    
+    return prisma.payment.findMany({
+      where,
+      include: { invoice: { include: { student: true } } },
+      orderBy: { date: 'desc' },
+    });
+  }
+
+  async createPayment(data: { amount: number; method: PaymentMethod; invoiceId: string; schoolId: string }) {
+    const payment = await prisma.payment.create({
+      data: {
+        amount: data.amount,
+        method: data.method,
+        invoiceId: data.invoiceId,
+        schoolId: data.schoolId,
+      },
+    });
+
+    // Update invoice status
+    const invoice = await prisma.studentInvoice.findUnique({
+      where: { id: data.invoiceId },
+      include: { payments: true },
+    });
+
+    if (invoice) {
+      const totalPaid = invoice.payments.reduce((sum, p) => sum + p.amount, 0);
+      const newStatus: InvoiceStatus = totalPaid >= invoice.amount ? 'PAID' : 'PENDING';
+      await prisma.studentInvoice.update({
+        where: { id: data.invoiceId },
+        data: { status: newStatus },
+      });
+    }
+
+    return payment;
+  }
+
+  // ============= Dashboard Stats =============
+  async getDashboardStats(schoolId: string) {
+    const [totalInvoices, paidInvoices, pendingInvoices] = await Promise.all([
+      prisma.studentInvoice.count({ where: { schoolId } }),
+      prisma.studentInvoice.count({ where: { schoolId, status: 'PAID' } }),
+      prisma.studentInvoice.count({ where: { schoolId, status: 'PENDING' } }),
     ]);
-    
-    const totalRevenue = payments.reduce((sum, p) => sum + p.amount, 0);
-    const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0);
-    
-    return {
-      totalRevenue,
-      totalExpenses,
-      netIncome: totalRevenue - totalExpenses,
-      paymentsCount: payments.length,
-      expensesCount: expenses.length,
-    };
+
+    return { totalInvoices, paidInvoices, pendingInvoices };
   }
 }
 

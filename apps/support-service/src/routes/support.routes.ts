@@ -3,39 +3,20 @@ import { supportController } from '../controllers/support.controller';
 
 const router = Router();
 
-// Statistics
-router.get('/stats', (req, res) => supportController.getTicketStats(req, res));
-
 // Tickets
-router.get('/tickets', (req, res) => supportController.getTickets(req, res));
-router.get('/tickets/:id', (req, res) => supportController.getTicketById(req, res));
-router.get('/tickets/no/:ticketNo', (req, res) => supportController.getTicketByNo(req, res));
-router.post('/tickets', (req, res) => supportController.createTicket(req, res));
-router.put('/tickets/:id', (req, res) => supportController.updateTicket(req, res));
-router.post('/tickets/:id/assign', (req, res) => supportController.assignTicket(req, res));
-router.post('/tickets/:id/resolve', (req, res) => supportController.resolveTicket(req, res));
-router.post('/tickets/:id/close', (req, res) => supportController.closeTicket(req, res));
-router.post('/tickets/:id/rate', (req, res) => supportController.rateTicket(req, res));
+router.get('/tickets', supportController.getTickets.bind(supportController));
+router.get('/tickets/:id', supportController.getTicketById.bind(supportController));
+router.get('/schools/:schoolId/tickets', supportController.getTicketsBySchool.bind(supportController));
+router.post('/tickets', supportController.createTicket.bind(supportController));
+router.patch('/tickets/:id', supportController.updateTicket.bind(supportController));
+router.post('/tickets/:id/close', supportController.closeTicket.bind(supportController));
+router.delete('/tickets/:id', supportController.deleteTicket.bind(supportController));
 
-// Messages
-router.post('/tickets/:id/messages', (req, res) => supportController.addMessage(req, res));
+// Replies
+router.get('/tickets/:ticketId/replies', supportController.getReplies.bind(supportController));
+router.post('/tickets/:ticketId/replies', supportController.createReply.bind(supportController));
 
-// Attachments
-router.post('/tickets/:id/attachments', (req, res) => supportController.addAttachment(req, res));
-router.delete('/tickets/:id/attachments/:attachmentId', (req, res) => supportController.deleteAttachment(req, res));
-
-// Knowledge Base
-router.get('/knowledge-base', (req, res) => supportController.getKnowledgeBaseArticles(req, res));
-router.get('/knowledge-base/:slug', (req, res) => supportController.getKnowledgeBaseArticleBySlug(req, res));
-router.post('/knowledge-base', (req, res) => supportController.createKnowledgeBaseArticle(req, res));
-router.put('/knowledge-base/:id', (req, res) => supportController.updateKnowledgeBaseArticle(req, res));
-router.delete('/knowledge-base/:id', (req, res) => supportController.deleteKnowledgeBaseArticle(req, res));
-router.post('/knowledge-base/:id/helpful', (req, res) => supportController.markArticleHelpful(req, res));
-
-// FAQs
-router.get('/faqs', (req, res) => supportController.getFAQs(req, res));
-router.post('/faqs', (req, res) => supportController.createFAQ(req, res));
-router.put('/faqs/:id', (req, res) => supportController.updateFAQ(req, res));
-router.delete('/faqs/:id', (req, res) => supportController.deleteFAQ(req, res));
+// Stats
+router.get('/stats', supportController.getStats.bind(supportController));
 
 export default router;

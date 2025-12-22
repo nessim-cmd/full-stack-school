@@ -1,367 +1,173 @@
-import prisma from '../lib/prisma';
-import bcrypt from 'bcryptjs';
+import { PrismaClient, PlanType, SubscriptionStatus } from '@prisma/client';
+
+const prisma = new PrismaClient();
 
 export class PlatformAdminService {
-  // ============= Super Admins =============
+  // Super Admin operations
   async getSuperAdmins() {
     return prisma.superAdmin.findMany({
-      select: {
-        id: true,
-        email: true,
-        firstName: true,
-        lastName: true,
-        phone: true,
-        avatar: true,
-        role: true,
-        permissions: true,
-        isActive: true,
-        lastLogin: true,
-        createdAt: true,
-      },
+      orderBy: { createdAt: 'desc' },
     });
   }
 
   async getSuperAdminById(id: string) {
     return prisma.superAdmin.findUnique({
       where: { id },
-      select: {
-        id: true,
-        email: true,
-        firstName: true,
-        lastName: true,
-        phone: true,
-        avatar: true,
-        role: true,
-        permissions: true,
-        isActive: true,
-        lastLogin: true,
-        createdAt: true,
-      },
     });
   }
 
-  async createSuperAdmin(data: any) {
-    const hashedPassword = await bcrypt.hash(data.password, 10);
-    
-    return prisma.superAdmin.create({
-      data: {
-        ...data,
-        password: hashedPassword,
-      },
-      select: {
-        id: true,
-        email: true,
-        firstName: true,
-        lastName: true,
-        createdAt: true,
-      },
+  async getSuperAdminByEmail(email: string) {
+    return prisma.superAdmin.findUnique({
+      where: { email },
     });
   }
 
-  async updateSuperAdmin(id: string, data: any) {
-    if (data.password) {
-      data.password = await bcrypt.hash(data.password, 10);
-    }
-    
-    return prisma.superAdmin.update({
-      where: { id },
-      data,
-      select: {
-        id: true,
-        email: true,
-        firstName: true,
-        lastName: true,
-        phone: true,
-        avatar: true,
-        role: true,
-        permissions: true,
-        isActive: true,
-        updatedAt: true,
+  // Audit Logs - requires superAdminId, entity, entityId, description
+  async getAuditLogs(filters?: { superAdminId?: string; action?: string; limit?: number }) {
+    return prisma.auditLog.findMany({
+      where: {
+        ...(filters?.superAdminId && { superAdminId: filters.superAdminId }),
+        ...(filters?.action && { action: filters.action }),
       },
+      include: { superAdmin: true },
+      orderBy: { createdAt: 'desc' },
+      take: filters?.limit || 100,
     });
   }
 
-  async deleteSuperAdmin(id: string) {
-    return prisma.superAdmin.delete({
-      where: { id },
-    });
+  async createAuditLog(data: {
+    action: string;
+    entity: string;
+    entityId: string;
+    description: string;
+    superAdminId: string;
+    metadata?: string;
+  }) {
+    return prisma.auditLog.create({ data });
   }
 
-  // ============= Platform Settings =============
-  async getPlatformSettings() {
-    let settings = await prisma.platformSettings.findFirst();
-    
-    if (!settings) {
-      settings = await prisma.platformSettings.create({
-        data: {},
-      });
-    }
-    
-    return settings;
+  // Dashboard Stats - School has subscriptionStatus not isActive
+  async getDashboardStats() {
+    const [
+      totalSchools,
+      activeSchools,
+      totalStudents,
+      totalTeachers,
+      openTickets,
+    ] = await Promise.all([
+      prisma.school.count(),
+      prisma.school.count({ where: { subscriptionStatus: 'ACTIVE' } }),
+      prisma.student.count(),
+      prisma.teacher.count(),
+      prisma.supportTicket.count({ where: { status: 'OPEN' } }),
+    ]);
+
+    return {
+      totalSchools,
+      activeSchools,
+      totalStudents,
+      totalTeachers,
+      openTickets,
+    };
   }
 
-  async updatePlatformSettings(data: any) {
-    const existing = await prisma.platformSettings.findFirst();
-    
+  // SaaS Settings
+  async getSaasSettings() {
+    return prisma.saasSettings.findFirst();
+  }
+
+  async updateSaasSettings(data: {
+    heroTitle?: string;
+    heroDescription?: string;
+    features?: string;
+    pricing?: string;
+  }) {
+    const existing = await prisma.saasSettings.findFirst();
     if (existing) {
-      return prisma.platformSettings.update({
+      return prisma.saasSettings.update({
         where: { id: existing.id },
         data,
       });
     }
-    
-    return prisma.platformSettings.create({
-      data,
-    });
-  }
-
-  // ============= Subscription Plans =============
-  async getSubscriptionPlans(includeInactive = false) {
-    return prisma.subscriptionPlan.findMany({
-      where: includeInactive ? {} : { isActive: true },
-      orderBy: { sortOrder: 'asc' },
-    });
-  }
-
-  async getSubscriptionPlanById(id: string) {
-    return prisma.subscriptionPlan.findUnique({
-      where: { id },
-    });
-  }
-
-  async createSubscriptionPlan(data: any) {
-    return prisma.subscriptionPlan.create({
-      data,
-    });
-  }
-
-  async updateSubscriptionPlan(id: string, data: any) {
-    return prisma.subscriptionPlan.update({
-      where: { id },
-      data,
-    });
-  }
-
-  async deleteSubscriptionPlan(id: string) {
-    return prisma.subscriptionPlan.delete({
-      where: { id },
-    });
-  }
-
-  // ============= Subscriptions =============
-  async getSubscriptions(
-    page: number = 1,
-    limit: number = 20,
-    filters?: {
-      status?: string;
-      planId?: string;
-    }
-  ) {
-    const skip = (page - 1) * limit;
-
-    const where: any = {};
-
-    if (filters?.status) {
-      where.status = filters.status;
-    }
-
-    if (filters?.planId) {
-      where.planId = filters.planId;
-    }
-
-    const [subscriptions, total] = await Promise.all([
-      prisma.subscription.findMany({
-        where,
-        include: {
-          plan: true,
-        },
-        skip,
-        take: limit,
-        orderBy: { createdAt: 'desc' },
-      }),
-      prisma.subscription.count({ where }),
-    ]);
-
-    return {
-      subscriptions,
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit),
-      },
-    };
-  }
-
-  async getSubscriptionBySchoolId(schoolId: string) {
-    return prisma.subscription.findUnique({
-      where: { schoolId },
-      include: {
-        plan: true,
-      },
-    });
-  }
-
-  async createSubscription(data: any) {
-    return prisma.subscription.create({
+    return prisma.saasSettings.create({
       data: {
-        ...data,
-        startDate: data.startDate ? new Date(data.startDate) : new Date(),
-        endDate: data.endDate ? new Date(data.endDate) : null,
-        trialEndsAt: data.trialEndsAt ? new Date(data.trialEndsAt) : null,
-        nextBillingDate: data.nextBillingDate ? new Date(data.nextBillingDate) : null,
-      },
-      include: {
-        plan: true,
+        heroTitle: data.heroTitle || 'Modern School Management Made Simple',
+        heroDescription: data.heroDescription || 'Complete school management solution',
+        features: data.features || '[]',
+        pricing: data.pricing || '[]',
       },
     });
   }
 
-  async updateSubscription(schoolId: string, data: any) {
-    const updateData: any = { ...data };
-    if (data.endDate) updateData.endDate = new Date(data.endDate);
-    if (data.nextBillingDate) updateData.nextBillingDate = new Date(data.nextBillingDate);
-
-    return prisma.subscription.update({
+  // Site Settings - requires schoolId
+  async getSiteSettings(schoolId: string) {
+    return prisma.siteSettings.findUnique({
       where: { schoolId },
-      data: updateData,
-      include: {
-        plan: true,
-      },
     });
   }
 
-  async cancelSubscription(schoolId: string) {
-    return prisma.subscription.update({
+  async updateSiteSettings(schoolId: string, data: Record<string, any>) {
+    const existing = await prisma.siteSettings.findUnique({
       where: { schoolId },
-      data: {
-        status: 'CANCELLED',
-        endDate: new Date(),
-      },
+    });
+    if (existing) {
+      return prisma.siteSettings.update({
+        where: { schoolId },
+        data,
+      });
+    }
+    return prisma.siteSettings.create({
+      data: { schoolId, ...data },
     });
   }
 
-  // ============= Audit Logs =============
-  async getAuditLogs(
-    page: number = 1,
-    limit: number = 50,
-    filters?: {
-      userId?: string;
-      action?: string;
-      resource?: string;
-      startDate?: Date;
-      endDate?: Date;
-    }
-  ) {
-    const skip = (page - 1) * limit;
-
-    const where: any = {};
-
-    if (filters?.userId) {
-      where.userId = filters.userId;
-    }
-
-    if (filters?.action) {
-      where.action = filters.action;
-    }
-
-    if (filters?.resource) {
-      where.resource = filters.resource;
-    }
-
-    if (filters?.startDate || filters?.endDate) {
-      where.createdAt = {};
-      if (filters?.startDate) where.createdAt.gte = filters.startDate;
-      if (filters?.endDate) where.createdAt.lte = filters.endDate;
-    }
-
-    const [logs, total] = await Promise.all([
-      prisma.auditLog.findMany({
-        where,
-        skip,
-        take: limit,
-        orderBy: { createdAt: 'desc' },
-      }),
-      prisma.auditLog.count({ where }),
-    ]);
-
-    return {
-      logs,
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit),
-      },
-    };
-  }
-
-  async createAuditLog(data: any) {
-    return prisma.auditLog.create({
-      data,
-    });
-  }
-
-  // ============= System Metrics =============
-  async recordMetric(name: string, value: number, unit?: string, tags?: any) {
-    return prisma.systemMetric.create({
-      data: {
-        name,
-        value,
-        unit,
-        tags,
-      },
-    });
-  }
-
-  async getMetrics(name: string, startDate: Date, endDate: Date) {
-    return prisma.systemMetric.findMany({
-      where: {
-        name,
-        recordedAt: {
-          gte: startDate,
-          lte: endDate,
+  // School Management
+  async getAllSchoolsWithDetails() {
+    return prisma.school.findMany({
+      include: {
+        _count: {
+          select: {
+            students: true,
+            teachers: true,
+            admins: true,
+          },
         },
       },
-      orderBy: { recordedAt: 'asc' },
+      orderBy: { createdAt: 'desc' },
     });
   }
 
-  // ============= Dashboard Stats =============
-  async getDashboardStats() {
-    const [
-      totalSchools,
-      activeSubscriptions,
-      subscriptionsByPlan,
-      subscriptionsByStatus,
-      recentLogs,
-    ] = await Promise.all([
-      prisma.subscription.count(),
-      prisma.subscription.count({ where: { status: 'ACTIVE' } }),
-      prisma.subscription.groupBy({
-        by: ['planId'],
-        _count: true,
-      }),
-      prisma.subscription.groupBy({
-        by: ['status'],
-        _count: true,
-      }),
-      prisma.auditLog.findMany({
-        take: 10,
-        orderBy: { createdAt: 'desc' },
-      }),
-    ]);
+  async toggleSchoolStatus(schoolId: string, status: SubscriptionStatus) {
+    return prisma.school.update({
+      where: { id: schoolId },
+      data: { subscriptionStatus: status },
+    });
+  }
 
-    return {
-      totalSchools,
-      activeSubscriptions,
-      subscriptionsByPlan,
-      subscriptionsByStatus: subscriptionsByStatus.reduce((acc, item) => {
-        acc[item.status] = item._count;
-        return acc;
-      }, {} as Record<string, number>),
-      recentLogs,
-    };
+  // Invoices for schools - requires plan field
+  async getInvoices(schoolId?: string) {
+    return prisma.invoice.findMany({
+      where: schoolId ? { schoolId } : {},
+      include: { school: true },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async createInvoice(data: {
+    schoolId: string;
+    amount: number;
+    dueDate: Date;
+    plan: PlanType;
+  }) {
+    return prisma.invoice.create({
+      data: {
+        schoolId: data.schoolId,
+        amount: data.amount,
+        dueDate: data.dueDate,
+        plan: data.plan,
+        status: 'PENDING',
+      },
+    });
   }
 }
 

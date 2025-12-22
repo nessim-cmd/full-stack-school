@@ -1,144 +1,119 @@
-import prisma from '../lib/prisma';
+import { PrismaClient } from '@prisma/client';
 
-export interface SiteSettingsInput {
-  primaryColor?: string;
-  secondaryColor?: string;
-  logo?: string;
-  favicon?: string;
-  email?: string;
-  phone?: string;
-  address?: string;
-  website?: string;
-  academicYearStart?: Date;
-  academicYearEnd?: Date;
-  timezone?: string;
-  dateFormat?: string;
-  timeFormat?: string;
-}
+const prisma = new PrismaClient();
 
-class SettingsService {
-  /**
-   * Get settings for a school
-   */
-  async getSettings(schoolId: string) {
+export class SettingsService {
+  // Get full site settings
+  async getSiteSettings(schoolId: string) {
     return prisma.siteSettings.findUnique({
       where: { schoolId },
     });
   }
 
-  /**
-   * Create or update settings for a school
-   */
-  async upsertSettings(schoolId: string, data: SiteSettingsInput) {
-    return prisma.siteSettings.upsert({
+  // Update site settings
+  async updateSiteSettings(schoolId: string, data: Record<string, any>) {
+    const existing = await prisma.siteSettings.findUnique({
       where: { schoolId },
-      create: {
-        schoolId,
-        ...data,
-      },
-      update: data,
+    });
+    
+    if (existing) {
+      return prisma.siteSettings.update({
+        where: { schoolId },
+        data,
+      });
+    }
+    
+    return prisma.siteSettings.create({
+      data: { schoolId, ...data },
     });
   }
 
-  /**
-   * Delete settings for a school
-   */
-  async deleteSettings(schoolId: string) {
-    return prisma.siteSettings.delete({
-      where: { schoolId },
-    });
-  }
-
-  /**
-   * Get theme settings
-   */
-  async getThemeSettings(schoolId: string) {
-    const settings = await prisma.siteSettings.findUnique({
+  // Get branding settings
+  async getBrandingSettings(schoolId: string) {
+    return prisma.siteSettings.findUnique({
       where: { schoolId },
       select: {
-        primaryColor: true,
-        secondaryColor: true,
-        logo: true,
-        favicon: true,
+        schoolName: true,
+        schoolLogo: true,
+        schoolTagline: true,
       },
     });
-
-    return settings || {
-      primaryColor: '#1a73e8',
-      secondaryColor: '#fbbc04',
-      logo: null,
-      favicon: null,
-    };
   }
 
-  /**
-   * Update theme settings
-   */
-  async updateThemeSettings(
-    schoolId: string,
-    data: Pick<SiteSettingsInput, 'primaryColor' | 'secondaryColor' | 'logo' | 'favicon'>
-  ) {
-    return this.upsertSettings(schoolId, data);
+  async updateBrandingSettings(schoolId: string, data: {
+    schoolName?: string;
+    schoolLogo?: string;
+    schoolTagline?: string;
+  }) {
+    return this.updateSiteSettings(schoolId, data);
   }
 
-  /**
-   * Get contact settings
-   */
-  async getContactSettings(schoolId: string) {
-    const settings = await prisma.siteSettings.findUnique({
+  // Get hero settings
+  async getHeroSettings(schoolId: string) {
+    return prisma.siteSettings.findUnique({
       where: { schoolId },
       select: {
-        email: true,
-        phone: true,
-        address: true,
-        website: true,
+        heroTitle: true,
+        heroDescription: true,
+        heroImage: true,
       },
     });
-
-    return settings || {
-      email: null,
-      phone: null,
-      address: null,
-      website: null,
-    };
   }
 
-  /**
-   * Update contact settings
-   */
-  async updateContactSettings(
-    schoolId: string,
-    data: Pick<SiteSettingsInput, 'email' | 'phone' | 'address' | 'website'>
-  ) {
-    return this.upsertSettings(schoolId, data);
+  async updateHeroSettings(schoolId: string, data: {
+    heroTitle?: string;
+    heroDescription?: string;
+    heroImage?: string;
+  }) {
+    return this.updateSiteSettings(schoolId, data);
   }
 
-  /**
-   * Get academic year settings
-   */
-  async getAcademicYearSettings(schoolId: string) {
-    const settings = await prisma.siteSettings.findUnique({
+  // Get stats settings
+  async getStatsSettings(schoolId: string) {
+    return prisma.siteSettings.findUnique({
       where: { schoolId },
       select: {
-        academicYearStart: true,
-        academicYearEnd: true,
+        totalStudents: true,
+        totalTeachers: true,
+        successRate: true,
+        yearsExperience: true,
       },
     });
-
-    return settings || {
-      academicYearStart: null,
-      academicYearEnd: null,
-    };
   }
 
-  /**
-   * Update academic year settings
-   */
-  async updateAcademicYearSettings(
-    schoolId: string,
-    data: Pick<SiteSettingsInput, 'academicYearStart' | 'academicYearEnd'>
-  ) {
-    return this.upsertSettings(schoolId, data);
+  async updateStatsSettings(schoolId: string, data: {
+    totalStudents?: string;
+    totalTeachers?: string;
+    successRate?: string;
+    yearsExperience?: string;
+  }) {
+    return this.updateSiteSettings(schoolId, data);
+  }
+
+  // Get about settings
+  async getAboutSettings(schoolId: string) {
+    return prisma.siteSettings.findUnique({
+      where: { schoolId },
+      select: {
+        missionTitle: true,
+        missionText: true,
+        visionTitle: true,
+        visionText: true,
+        valuesTitle: true,
+        valuesText: true,
+      },
+    });
+  }
+
+  async updateAboutSettings(schoolId: string, data: {
+    missionTitle?: string;
+    missionText?: string;
+    visionTitle?: string;
+    visionText?: string;
+    valuesTitle?: string;
+    valuesText?: string;
+  }) {
+    return this.updateSiteSettings(schoolId, data);
   }
 }
 

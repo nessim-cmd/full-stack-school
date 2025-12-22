@@ -111,8 +111,7 @@ export class AcademicController {
   async getSubjects(req: Request, res: Response): Promise<void> {
     try {
       const { schoolId } = req.params;
-      const { gradeId } = req.query;
-      const subjects = await academicService.getSubjects(schoolId, gradeId ? Number(gradeId) : undefined);
+      const subjects = await academicService.getSubjects(schoolId);
       res.status(HTTP_STATUS.OK).json({ success: true, data: subjects });
     } catch (error) {
       console.error('Get subjects error:', error);
@@ -205,9 +204,9 @@ export class AcademicController {
   async getExams(req: Request, res: Response): Promise<void> {
     try {
       const { schoolId } = req.params;
-      const { page, limit } = req.query;
-      const result = await academicService.getExams(schoolId, Number(page) || 1, Number(limit) || 10);
-      res.status(HTTP_STATUS.OK).json({ success: true, ...result });
+      const { lessonId } = req.query;
+      const exams = await academicService.getExams(schoolId, lessonId ? Number(lessonId) : undefined);
+      res.status(HTTP_STATUS.OK).json({ success: true, data: exams });
     } catch (error) {
       console.error('Get exams error:', error);
       res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Failed to fetch exams' });
@@ -250,11 +249,10 @@ export class AcademicController {
   async getResults(req: Request, res: Response): Promise<void> {
     try {
       const { schoolId } = req.params;
-      const { studentId, examId } = req.query;
+      const { studentId } = req.query;
       const results = await academicService.getResults(
         schoolId,
-        studentId as string,
-        examId ? Number(examId) : undefined
+        studentId as string
       );
       res.status(HTTP_STATUS.OK).json({ success: true, data: results });
     } catch (error) {

@@ -1,25 +1,74 @@
 import { Request, Response } from 'express';
 import { financeService } from '../services/finance.service';
-import { HTTP_STATUS } from '@workspace/shared/constants';
+
+const HTTP_STATUS = { OK: 200, CREATED: 201, BAD_REQUEST: 400, NOT_FOUND: 404, INTERNAL_SERVER_ERROR: 500 };
 
 export class FinanceController {
-  // ============= Fee Structures =============
+  // Fee Categories
+  async getFeeCategories(req: Request, res: Response): Promise<void> {
+    try {
+      const { schoolId } = req.params;
+      const categories = await financeService.getFeeCategories(schoolId);
+      res.status(HTTP_STATUS.OK).json({ success: true, data: categories });
+    } catch (error) {
+      console.error('Get fee categories error:', error);
+      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Failed to get fee categories' });
+    }
+  }
+
+  async createFeeCategory(req: Request, res: Response): Promise<void> {
+    try {
+      const category = await financeService.createFeeCategory(req.body);
+      res.status(HTTP_STATUS.CREATED).json({ success: true, data: category });
+    } catch (error) {
+      console.error('Create fee category error:', error);
+      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Failed to create fee category' });
+    }
+  }
+
+  async updateFeeCategory(req: Request, res: Response): Promise<void> {
+    try {
+      const { id } = req.params;
+      const category = await financeService.updateFeeCategory(Number(id), req.body);
+      res.status(HTTP_STATUS.OK).json({ success: true, data: category });
+    } catch (error) {
+      console.error('Update fee category error:', error);
+      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Failed to update fee category' });
+    }
+  }
+
+  async deleteFeeCategory(req: Request, res: Response): Promise<void> {
+    try {
+      const { id } = req.params;
+      await financeService.deleteFeeCategory(Number(id));
+      res.status(HTTP_STATUS.OK).json({ success: true, message: 'Fee category deleted' });
+    } catch (error) {
+      console.error('Delete fee category error:', error);
+      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Failed to delete fee category' });
+    }
+  }
+
+  // Fee Structures
   async getFeeStructures(req: Request, res: Response): Promise<void> {
     try {
       const { schoolId } = req.params;
-      const { gradeId } = req.query;
-      const fees = await financeService.getFeeStructures(schoolId, gradeId ? Number(gradeId) : undefined);
-      res.status(HTTP_STATUS.OK).json({ success: true, data: fees });
+      const { feeCategoryId, gradeId } = req.query;
+      const structures = await financeService.getFeeStructures(
+        schoolId,
+        feeCategoryId ? Number(feeCategoryId) : undefined,
+        gradeId ? Number(gradeId) : undefined
+      );
+      res.status(HTTP_STATUS.OK).json({ success: true, data: structures });
     } catch (error) {
       console.error('Get fee structures error:', error);
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Failed to fetch fee structures' });
+      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Failed to get fee structures' });
     }
   }
 
   async createFeeStructure(req: Request, res: Response): Promise<void> {
     try {
-      const fee = await financeService.createFeeStructure(req.body);
-      res.status(HTTP_STATUS.CREATED).json({ success: true, data: fee });
+      const structure = await financeService.createFeeStructure(req.body);
+      res.status(HTTP_STATUS.CREATED).json({ success: true, data: structure });
     } catch (error) {
       console.error('Create fee structure error:', error);
       res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Failed to create fee structure' });
@@ -29,8 +78,8 @@ export class FinanceController {
   async updateFeeStructure(req: Request, res: Response): Promise<void> {
     try {
       const { id } = req.params;
-      const fee = await financeService.updateFeeStructure(Number(id), req.body);
-      res.status(HTTP_STATUS.OK).json({ success: true, data: fee });
+      const structure = await financeService.updateFeeStructure(Number(id), req.body);
+      res.status(HTTP_STATUS.OK).json({ success: true, data: structure });
     } catch (error) {
       console.error('Update fee structure error:', error);
       res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Failed to update fee structure' });
@@ -48,22 +97,76 @@ export class FinanceController {
     }
   }
 
-  // ============= Payments =============
+  // Student Invoices
+  async getStudentInvoices(req: Request, res: Response): Promise<void> {
+    try {
+      const { schoolId } = req.params;
+      const { studentId, status } = req.query;
+      const invoices = await financeService.getStudentInvoices(schoolId, studentId as string, status as any);
+      res.status(HTTP_STATUS.OK).json({ success: true, data: invoices });
+    } catch (error) {
+      console.error('Get student invoices error:', error);
+      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Failed to get invoices' });
+    }
+  }
+
+  async getStudentInvoiceById(req: Request, res: Response): Promise<void> {
+    try {
+      const { id } = req.params;
+      const invoice = await financeService.getStudentInvoiceById(id);
+      if (!invoice) {
+        res.status(HTTP_STATUS.NOT_FOUND).json({ success: false, error: 'Invoice not found' });
+        return;
+      }
+      res.status(HTTP_STATUS.OK).json({ success: true, data: invoice });
+    } catch (error) {
+      console.error('Get invoice error:', error);
+      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Failed to get invoice' });
+    }
+  }
+
+  async createStudentInvoice(req: Request, res: Response): Promise<void> {
+    try {
+      const invoice = await financeService.createStudentInvoice(req.body);
+      res.status(HTTP_STATUS.CREATED).json({ success: true, data: invoice });
+    } catch (error) {
+      console.error('Create invoice error:', error);
+      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Failed to create invoice' });
+    }
+  }
+
+  async updateStudentInvoice(req: Request, res: Response): Promise<void> {
+    try {
+      const { id } = req.params;
+      const invoice = await financeService.updateStudentInvoice(id, req.body);
+      res.status(HTTP_STATUS.OK).json({ success: true, data: invoice });
+    } catch (error) {
+      console.error('Update invoice error:', error);
+      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Failed to update invoice' });
+    }
+  }
+
+  async deleteStudentInvoice(req: Request, res: Response): Promise<void> {
+    try {
+      const { id } = req.params;
+      await financeService.deleteStudentInvoice(id);
+      res.status(HTTP_STATUS.OK).json({ success: true, message: 'Invoice deleted' });
+    } catch (error) {
+      console.error('Delete invoice error:', error);
+      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Failed to delete invoice' });
+    }
+  }
+
+  // Payments
   async getPayments(req: Request, res: Response): Promise<void> {
     try {
       const { schoolId } = req.params;
-      const { studentId, status, page, limit } = req.query;
-      const result = await financeService.getPayments(
-        schoolId,
-        studentId as string,
-        status as string,
-        Number(page) || 1,
-        Number(limit) || 10
-      );
-      res.status(HTTP_STATUS.OK).json({ success: true, ...result });
+      const { invoiceId } = req.query;
+      const payments = await financeService.getPayments(schoolId, invoiceId as string);
+      res.status(HTTP_STATUS.OK).json({ success: true, data: payments });
     } catch (error) {
       console.error('Get payments error:', error);
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Failed to fetch payments' });
+      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Failed to get payments' });
     }
   }
 
@@ -77,212 +180,15 @@ export class FinanceController {
     }
   }
 
-  async updatePayment(req: Request, res: Response): Promise<void> {
-    try {
-      const { id } = req.params;
-      const payment = await financeService.updatePayment(Number(id), req.body);
-      res.status(HTTP_STATUS.OK).json({ success: true, data: payment });
-    } catch (error) {
-      console.error('Update payment error:', error);
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Failed to update payment' });
-    }
-  }
-
-  async deletePayment(req: Request, res: Response): Promise<void> {
-    try {
-      const { id } = req.params;
-      await financeService.deletePayment(Number(id));
-      res.status(HTTP_STATUS.OK).json({ success: true, message: 'Payment deleted' });
-    } catch (error) {
-      console.error('Delete payment error:', error);
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Failed to delete payment' });
-    }
-  }
-
-  // ============= Invoices =============
-  async getInvoices(req: Request, res: Response): Promise<void> {
+  // Dashboard
+  async getDashboardStats(req: Request, res: Response): Promise<void> {
     try {
       const { schoolId } = req.params;
-      const { studentId, status, page, limit } = req.query;
-      const result = await financeService.getInvoices(
-        schoolId,
-        studentId as string,
-        status as string,
-        Number(page) || 1,
-        Number(limit) || 10
-      );
-      res.status(HTTP_STATUS.OK).json({ success: true, ...result });
+      const stats = await financeService.getDashboardStats(schoolId);
+      res.status(HTTP_STATUS.OK).json({ success: true, data: stats });
     } catch (error) {
-      console.error('Get invoices error:', error);
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Failed to fetch invoices' });
-    }
-  }
-
-  async createInvoice(req: Request, res: Response): Promise<void> {
-    try {
-      const invoice = await financeService.createInvoice(req.body);
-      res.status(HTTP_STATUS.CREATED).json({ success: true, data: invoice });
-    } catch (error) {
-      console.error('Create invoice error:', error);
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Failed to create invoice' });
-    }
-  }
-
-  async updateInvoice(req: Request, res: Response): Promise<void> {
-    try {
-      const { id } = req.params;
-      const invoice = await financeService.updateInvoice(Number(id), req.body);
-      res.status(HTTP_STATUS.OK).json({ success: true, data: invoice });
-    } catch (error) {
-      console.error('Update invoice error:', error);
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Failed to update invoice' });
-    }
-  }
-
-  async deleteInvoice(req: Request, res: Response): Promise<void> {
-    try {
-      const { id } = req.params;
-      await financeService.deleteInvoice(Number(id));
-      res.status(HTTP_STATUS.OK).json({ success: true, message: 'Invoice deleted' });
-    } catch (error) {
-      console.error('Delete invoice error:', error);
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Failed to delete invoice' });
-    }
-  }
-
-  // ============= Expenses =============
-  async getExpenses(req: Request, res: Response): Promise<void> {
-    try {
-      const { schoolId } = req.params;
-      const { category, status, page, limit } = req.query;
-      const result = await financeService.getExpenses(
-        schoolId,
-        category as string,
-        status as string,
-        Number(page) || 1,
-        Number(limit) || 10
-      );
-      res.status(HTTP_STATUS.OK).json({ success: true, ...result });
-    } catch (error) {
-      console.error('Get expenses error:', error);
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Failed to fetch expenses' });
-    }
-  }
-
-  async createExpense(req: Request, res: Response): Promise<void> {
-    try {
-      const expense = await financeService.createExpense(req.body);
-      res.status(HTTP_STATUS.CREATED).json({ success: true, data: expense });
-    } catch (error) {
-      console.error('Create expense error:', error);
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Failed to create expense' });
-    }
-  }
-
-  async updateExpense(req: Request, res: Response): Promise<void> {
-    try {
-      const { id } = req.params;
-      const expense = await financeService.updateExpense(Number(id), req.body);
-      res.status(HTTP_STATUS.OK).json({ success: true, data: expense });
-    } catch (error) {
-      console.error('Update expense error:', error);
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Failed to update expense' });
-    }
-  }
-
-  async approveExpense(req: Request, res: Response): Promise<void> {
-    try {
-      const { id } = req.params;
-      const { approvedBy } = req.body;
-      const expense = await financeService.approveExpense(Number(id), approvedBy);
-      res.status(HTTP_STATUS.OK).json({ success: true, data: expense });
-    } catch (error) {
-      console.error('Approve expense error:', error);
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Failed to approve expense' });
-    }
-  }
-
-  async rejectExpense(req: Request, res: Response): Promise<void> {
-    try {
-      const { id } = req.params;
-      const expense = await financeService.rejectExpense(Number(id));
-      res.status(HTTP_STATUS.OK).json({ success: true, data: expense });
-    } catch (error) {
-      console.error('Reject expense error:', error);
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Failed to reject expense' });
-    }
-  }
-
-  async deleteExpense(req: Request, res: Response): Promise<void> {
-    try {
-      const { id } = req.params;
-      await financeService.deleteExpense(Number(id));
-      res.status(HTTP_STATUS.OK).json({ success: true, message: 'Expense deleted' });
-    } catch (error) {
-      console.error('Delete expense error:', error);
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Failed to delete expense' });
-    }
-  }
-
-  // ============= Budgets =============
-  async getBudgets(req: Request, res: Response): Promise<void> {
-    try {
-      const { schoolId } = req.params;
-      const { category } = req.query;
-      const budgets = await financeService.getBudgets(schoolId, category as string);
-      res.status(HTTP_STATUS.OK).json({ success: true, data: budgets });
-    } catch (error) {
-      console.error('Get budgets error:', error);
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Failed to fetch budgets' });
-    }
-  }
-
-  async createBudget(req: Request, res: Response): Promise<void> {
-    try {
-      const budget = await financeService.createBudget(req.body);
-      res.status(HTTP_STATUS.CREATED).json({ success: true, data: budget });
-    } catch (error) {
-      console.error('Create budget error:', error);
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Failed to create budget' });
-    }
-  }
-
-  async updateBudget(req: Request, res: Response): Promise<void> {
-    try {
-      const { id } = req.params;
-      const budget = await financeService.updateBudget(Number(id), req.body);
-      res.status(HTTP_STATUS.OK).json({ success: true, data: budget });
-    } catch (error) {
-      console.error('Update budget error:', error);
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Failed to update budget' });
-    }
-  }
-
-  async deleteBudget(req: Request, res: Response): Promise<void> {
-    try {
-      const { id } = req.params;
-      await financeService.deleteBudget(Number(id));
-      res.status(HTTP_STATUS.OK).json({ success: true, message: 'Budget deleted' });
-    } catch (error) {
-      console.error('Delete budget error:', error);
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Failed to delete budget' });
-    }
-  }
-
-  // ============= Reports =============
-  async getFinancialSummary(req: Request, res: Response): Promise<void> {
-    try {
-      const { schoolId } = req.params;
-      const { startDate, endDate } = req.query;
-      const summary = await financeService.getFinancialSummary(
-        schoolId,
-        new Date(startDate as string),
-        new Date(endDate as string)
-      );
-      res.status(HTTP_STATUS.OK).json({ success: true, data: summary });
-    } catch (error) {
-      console.error('Get financial summary error:', error);
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Failed to fetch summary' });
+      console.error('Get stats error:', error);
+      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Failed to get stats' });
     }
   }
 }

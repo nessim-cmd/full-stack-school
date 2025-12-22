@@ -1,70 +1,45 @@
-import prisma from '../lib/prisma';
-import { PlanType, SubscriptionStatus } from '../generated/prisma-client';
+import { PrismaClient, PlanType, SubscriptionStatus } from '@prisma/client';
 
-export interface CreateSchoolInput {
-  name: string;
-  slug: string;
-  domain?: string;
-  plan?: PlanType;
-  enabledServices?: string[];
-}
+const prisma = new PrismaClient();
 
-export interface UpdateSchoolInput {
-  name?: string;
-  slug?: string;
-  domain?: string;
-  plan?: PlanType;
-  subscriptionStatus?: SubscriptionStatus;
-  trialEndsAt?: Date;
-  subscriptionEndsAt?: Date;
-  enabledServices?: string[];
-}
-
-export interface SchoolFilter {
-  plan?: PlanType;
-  subscriptionStatus?: SubscriptionStatus;
-  search?: string;
-}
-
-class SchoolService {
-  /**
-   * Create a new school
-   */
-  async createSchool(data: CreateSchoolInput) {
-    const trialEndsAt = new Date();
-    trialEndsAt.setDate(trialEndsAt.getDate() + 14); // 14-day trial
-
-    return prisma.school.create({
-      data: {
-        name: data.name,
-        slug: data.slug,
-        domain: data.domain,
-        plan: data.plan || 'FREE',
-        subscriptionStatus: 'TRIAL',
-        trialEndsAt,
-        enabledServices: JSON.stringify(data.enabledServices || []),
+export class SchoolService {
+  async getSchools(filters?: { subscriptionStatus?: SubscriptionStatus; planType?: PlanType }) {
+    return prisma.school.findMany({
+      where: {
+        ...(filters?.subscriptionStatus && { subscriptionStatus: filters.subscriptionStatus }),
+        ...(filters?.planType && { plan: filters.planType }),
       },
+      include: {
+        _count: {
+          select: {
+            students: true,
+            teachers: true,
+            admins: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
     });
   }
 
-  /**
-   * Get a school by ID
-   */
   async getSchoolById(id: string) {
     return prisma.school.findUnique({
       where: { id },
       include: {
-        settings: true,
-        memberships: {
-          include: { manager: true },
+        _count: {
+          select: {
+            students: true,
+            teachers: true,
+            admins: true,
+            grades: true,
+            classes: true,
+          },
         },
+        settings: true,
       },
     });
   }
 
-  /**
-   * Get a school by slug (subdomain)
-   */
   async getSchoolBySlug(slug: string) {
     return prisma.school.findUnique({
       where: { slug },
@@ -74,161 +49,94 @@ class SchoolService {
     });
   }
 
-  /**
-   * Get a school by custom domain
-   */
-  async getSchoolByDomain(domain: string) {
-    return prisma.school.findUnique({
-      where: { domain },
-      include: {
-        settings: true,
+  async createSchool(data: {
+    name: string;
+    slug: string;
+    address?: string;
+    phone?: string;
+    email?: string;
+    logo?: string;
+    planType?: PlanType;
+  }) {
+    return prisma.school.create({
+      data: {
+        name: data.name,
+        slug: data.slug,
+        plan: data.planType || 'FREE',
+        subscriptionStatus: 'TRIAL',
+        trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // 14 days
       },
     });
   }
 
-  /**
-   * List all schools with optional filtering
-   */
-  async listSchools(filter?: SchoolFilter, page = 1, limit = 10) {
-    const where: any = {};
-
-    if (filter?.plan) {
-      where.plan = filter.plan;
+  async updateSchool(id: string, data: Record<string, any>) {
+    // Remove undefined values and isActive if present
+    const cleanData: Record<string, any> = {};
+    for (const [key, value] of Object.entries(data)) {
+      if (value !== undefined && key !== 'isActive') {
+        cleanData[key] = value;
+      }
     }
+    
+    return prisma.school.update({
+      where: { id },
+      data: cleanData,
+    });
+  }
 
-    if (filter?.subscriptionStatus) {
-      where.subscriptionStatus = filter.subscriptionStatus;
-    }
+  async deleteSchool(id: string) {
+    return prisma.school.delete({ where: { id } });
+  }
 
-    if (filter?.search) {
-      where.OR = [
-        { name: { contains: filter.search, mode: 'insensitive' } },
-        { slug: { contains: filter.search, mode: 'insensitive' } },
-      ];
-    }
+  async isSlugAvailable(slug: string, excludeId?: string) {
+    const existing = await prisma.school.findUnique({
+      where: { slug },
+    });
+    if (!existing) return true;
+    if (excludeId && existing.id === excludeId) return true;
+    return false;
+  }
 
-    const [schools, total] = await Promise.all([
-      prisma.school.findMany({
-        where,
-        skip: (page - 1) * limit,
-        take: limit,
-        orderBy: { createdAt: 'desc' },
-        include: { settings: true },
-      }),
-      prisma.school.count({ where }),
+  async getSchoolStats(schoolId: string) {
+    const [studentsCount, teachersCount, classesCount, gradesCount] = await Promise.all([
+      prisma.student.count({ where: { schoolId } }),
+      prisma.teacher.count({ where: { schoolId } }),
+      prisma.class.count({ where: { schoolId } }),
+      prisma.grade.count({ where: { schoolId } }),
     ]);
 
     return {
-      schools,
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit),
-      },
+      students: studentsCount,
+      teachers: teachersCount,
+      classes: classesCount,
+      grades: gradesCount,
     };
   }
 
-  /**
-   * Update a school
-   */
-  async updateSchool(id: string, data: UpdateSchoolInput) {
-    const updateData: any = { ...data };
+  async getActiveSchoolsCount() {
+    return prisma.school.count({ where: { subscriptionStatus: 'ACTIVE' } });
+  }
 
-    if (data.enabledServices) {
-      updateData.enabledServices = JSON.stringify(data.enabledServices);
-    }
+  // School Managers - use schools relation (through SchoolMembership)
+  async getSchoolManagers() {
+    return prisma.schoolManager.findMany({
+      include: { schools: { include: { school: true } } },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
 
-    return prisma.school.update({
+  async getSchoolManagerById(id: string) {
+    return prisma.schoolManager.findUnique({
       where: { id },
-      data: updateData,
+      include: { schools: { include: { school: true } } },
     });
   }
 
-  /**
-   * Delete a school
-   */
-  async deleteSchool(id: string) {
-    return prisma.school.delete({
-      where: { id },
+  async getSchoolManagerByEmail(email: string) {
+    return prisma.schoolManager.findUnique({
+      where: { email },
+      include: { schools: { include: { school: true } } },
     });
-  }
-
-  /**
-   * Update school subscription
-   */
-  async updateSubscription(
-    id: string,
-    plan: PlanType,
-    status: SubscriptionStatus,
-    subscriptionEndsAt?: Date
-  ) {
-    return prisma.school.update({
-      where: { id },
-      data: {
-        plan,
-        subscriptionStatus: status,
-        subscriptionEndsAt,
-      },
-    });
-  }
-
-  /**
-   * Get enabled services for a school
-   */
-  async getEnabledServices(id: string): Promise<string[]> {
-    const school = await prisma.school.findUnique({
-      where: { id },
-      select: { enabledServices: true },
-    });
-
-    if (!school) return [];
-
-    try {
-      return JSON.parse(school.enabledServices);
-    } catch {
-      return [];
-    }
-  }
-
-  /**
-   * Update enabled services for a school
-   */
-  async updateEnabledServices(id: string, services: string[]) {
-    return prisma.school.update({
-      where: { id },
-      data: {
-        enabledServices: JSON.stringify(services),
-      },
-    });
-  }
-
-  /**
-   * Check if a slug is available
-   */
-  async isSlugAvailable(slug: string, excludeId?: string): Promise<boolean> {
-    const existing = await prisma.school.findUnique({
-      where: { slug },
-      select: { id: true },
-    });
-
-    if (!existing) return true;
-    if (excludeId && existing.id === excludeId) return true;
-    return false;
-  }
-
-  /**
-   * Check if a domain is available
-   */
-  async isDomainAvailable(domain: string, excludeId?: string): Promise<boolean> {
-    const existing = await prisma.school.findUnique({
-      where: { domain },
-      select: { id: true },
-    });
-
-    if (!existing) return true;
-    if (excludeId && existing.id === excludeId) return true;
-    return false;
   }
 }
 

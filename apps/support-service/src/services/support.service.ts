@@ -1,155 +1,76 @@
-import prisma from '../lib/prisma';
+import { PrismaClient, TicketStatus, TicketPriority } from '@prisma/client';
+
+const prisma = new PrismaClient();
 
 export class SupportService {
-  // ============= Tickets =============
-  async getTickets(
-    page: number = 1,
-    limit: number = 20,
-    filters?: {
-      schoolId?: string;
-      userId?: string;
-      status?: string;
-      priority?: string;
-      category?: string;
-      assignedTo?: string;
-      search?: string;
-    }
-  ) {
-    const skip = (page - 1) * limit;
-
-    const where: any = {};
-
-    if (filters?.schoolId) {
-      where.schoolId = filters.schoolId;
-    }
-
-    if (filters?.userId) {
-      where.userId = filters.userId;
-    }
-
-    if (filters?.status) {
-      where.status = filters.status;
-    }
-
-    if (filters?.priority) {
-      where.priority = filters.priority;
-    }
-
-    if (filters?.category) {
-      where.category = filters.category;
-    }
-
-    if (filters?.assignedTo) {
-      where.assignedTo = filters.assignedTo;
-    }
-
-    if (filters?.search) {
-      where.OR = [
-        { subject: { contains: filters.search, mode: 'insensitive' } },
-        { ticketNo: { contains: filters.search, mode: 'insensitive' } },
-        { userName: { contains: filters.search, mode: 'insensitive' } },
-      ];
-    }
-
-    const [tickets, total] = await Promise.all([
-      prisma.supportTicket.findMany({
-        where,
-        include: {
-          messages: {
-            take: 1,
-            orderBy: { createdAt: 'desc' },
-          },
-          _count: {
-            select: { messages: true, attachments: true },
-          },
-        },
-        skip,
-        take: limit,
-        orderBy: { createdAt: 'desc' },
-      }),
-      prisma.supportTicket.count({ where }),
-    ]);
-
-    return {
-      tickets,
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit),
+  // Support Tickets - id is String UUID
+  async getTickets(filters?: { status?: TicketStatus; priority?: TicketPriority; schoolId?: string }) {
+    return prisma.supportTicket.findMany({
+      where: {
+        ...(filters?.status && { status: filters.status }),
+        ...(filters?.priority && { priority: filters.priority }),
+        ...(filters?.schoolId && { schoolId: filters.schoolId }),
       },
-    };
+      include: {
+        school: true,
+        replies: {
+          orderBy: { createdAt: 'asc' },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
   }
 
   async getTicketById(id: string) {
     return prisma.supportTicket.findUnique({
       where: { id },
       include: {
-        messages: {
+        school: true,
+        replies: {
           orderBy: { createdAt: 'asc' },
         },
-        attachments: true,
       },
     });
   }
 
-  async getTicketByNo(ticketNo: string) {
-    return prisma.supportTicket.findUnique({
-      where: { ticketNo },
+  async getTicketsBySchool(schoolId: string) {
+    return prisma.supportTicket.findMany({
+      where: { schoolId },
       include: {
-        messages: {
+        replies: {
           orderBy: { createdAt: 'asc' },
         },
-        attachments: true,
       },
+      orderBy: { createdAt: 'desc' },
     });
   }
 
-  async createTicket(data: any) {
-    const ticketNo = await this.generateTicketNo();
-    
+  async createTicket(data: {
+    subject: string;
+    message: string;
+    priority?: TicketPriority;
+    schoolId: string;
+  }) {
     return prisma.supportTicket.create({
       data: {
-        ...data,
-        ticketNo,
+        subject: data.subject,
+        message: data.message,
+        priority: data.priority || 'MEDIUM',
+        status: 'OPEN',
+        schoolId: data.schoolId,
       },
-      include: {
-        messages: true,
-        attachments: true,
-      },
+      include: { school: true },
     });
   }
 
-  async updateTicket(id: string, data: any) {
+  async updateTicket(
+    id: string,
+    data: { status?: TicketStatus; priority?: TicketPriority }
+  ) {
     return prisma.supportTicket.update({
       where: { id },
       data,
-      include: {
-        messages: true,
-        attachments: true,
-      },
-    });
-  }
-
-  async assignTicket(id: string, assignedTo: string) {
-    return prisma.supportTicket.update({
-      where: { id },
-      data: {
-        assignedTo,
-        assignedAt: new Date(),
-        status: 'IN_PROGRESS',
-      },
-    });
-  }
-
-  async resolveTicket(id: string, resolution: string) {
-    return prisma.supportTicket.update({
-      where: { id },
-      data: {
-        status: 'RESOLVED',
-        resolution,
-        resolvedAt: new Date(),
-      },
+      include: { school: true },
     });
   }
 
@@ -162,236 +83,53 @@ export class SupportService {
     });
   }
 
-  async rateTicket(id: string, rating: number, feedback?: string) {
-    return prisma.supportTicket.update({
-      where: { id },
-      data: {
-        rating,
-        feedback,
-      },
+  async deleteTicket(id: string) {
+    await prisma.supportTicketReply.deleteMany({
+      where: { ticketId: id },
     });
-  }
-
-  private async generateTicketNo(): Promise<string> {
-    const today = new Date();
-    const prefix = `TKT-${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, '0')}`;
-    
-    const count = await prisma.supportTicket.count({
-      where: {
-        ticketNo: { startsWith: prefix },
-      },
-    });
-    
-    return `${prefix}-${String(count + 1).padStart(5, '0')}`;
-  }
-
-  // ============= Messages =============
-  async addMessage(ticketId: string, data: any) {
-    const message = await prisma.ticketMessage.create({
-      data: {
-        ticketId,
-        ...data,
-      },
-    });
-
-    // Update ticket status if waiting for customer and user replies
-    if (data.senderType === 'user') {
-      await prisma.supportTicket.update({
-        where: { id: ticketId },
-        data: { status: 'IN_PROGRESS' },
-      });
-    }
-
-    return message;
-  }
-
-  // ============= Attachments =============
-  async addAttachment(ticketId: string, data: any) {
-    return prisma.ticketAttachment.create({
-      data: {
-        ticketId,
-        ...data,
-      },
-    });
-  }
-
-  async deleteAttachment(id: string) {
-    return prisma.ticketAttachment.delete({
+    return prisma.supportTicket.delete({
       where: { id },
     });
   }
 
-  // ============= Knowledge Base =============
-  async getKnowledgeBaseArticles(
-    page: number = 1,
-    limit: number = 20,
-    filters?: {
-      category?: string;
-      search?: string;
-      isPublished?: boolean;
-    }
-  ) {
-    const skip = (page - 1) * limit;
+  // Ticket Replies
+  async getReplies(ticketId: string) {
+    return prisma.supportTicketReply.findMany({
+      where: { ticketId },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
 
-    const where: any = {};
+  async createReply(data: {
+    ticketId: string;
+    message: string;
+    isAdmin: boolean;
+  }) {
+    return prisma.supportTicketReply.create({
+      data: {
+        ticketId: data.ticketId,
+        message: data.message,
+        isAdmin: data.isAdmin,
+      },
+    });
+  }
 
-    if (filters?.category) {
-      where.category = filters.category;
-    }
-
-    if (filters?.isPublished !== undefined) {
-      where.isPublished = filters.isPublished;
-    }
-
-    if (filters?.search) {
-      where.OR = [
-        { title: { contains: filters.search, mode: 'insensitive' } },
-        { content: { contains: filters.search, mode: 'insensitive' } },
-        { tags: { hasSome: [filters.search] } },
-      ];
-    }
-
-    const [articles, total] = await Promise.all([
-      prisma.knowledgeBase.findMany({
-        where,
-        skip,
-        take: limit,
-        orderBy: { createdAt: 'desc' },
-      }),
-      prisma.knowledgeBase.count({ where }),
-    ]);
+  // Dashboard Stats
+  async getStats() {
+    const [openTickets, inProgressTickets, closedTickets, highPriorityTickets] =
+      await Promise.all([
+        prisma.supportTicket.count({ where: { status: 'OPEN' } }),
+        prisma.supportTicket.count({ where: { status: 'IN_PROGRESS' } }),
+        prisma.supportTicket.count({ where: { status: 'CLOSED' } }),
+        prisma.supportTicket.count({ where: { priority: 'HIGH' } }),
+      ]);
 
     return {
-      articles,
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit),
-      },
-    };
-  }
-
-  async getKnowledgeBaseArticleBySlug(slug: string) {
-    const article = await prisma.knowledgeBase.findUnique({
-      where: { slug },
-    });
-
-    if (article) {
-      await prisma.knowledgeBase.update({
-        where: { id: article.id },
-        data: { viewCount: { increment: 1 } },
-      });
-    }
-
-    return article;
-  }
-
-  async createKnowledgeBaseArticle(data: any) {
-    return prisma.knowledgeBase.create({
-      data,
-    });
-  }
-
-  async updateKnowledgeBaseArticle(id: string, data: any) {
-    return prisma.knowledgeBase.update({
-      where: { id },
-      data,
-    });
-  }
-
-  async deleteKnowledgeBaseArticle(id: string) {
-    return prisma.knowledgeBase.delete({
-      where: { id },
-    });
-  }
-
-  async markArticleHelpful(id: string) {
-    return prisma.knowledgeBase.update({
-      where: { id },
-      data: { helpfulCount: { increment: 1 } },
-    });
-  }
-
-  // ============= FAQs =============
-  async getFAQs(category?: string) {
-    const where: any = { isPublished: true };
-    if (category) {
-      where.category = category;
-    }
-
-    return prisma.fAQ.findMany({
-      where,
-      orderBy: [{ category: 'asc' }, { sortOrder: 'asc' }],
-    });
-  }
-
-  async createFAQ(data: any) {
-    return prisma.fAQ.create({
-      data,
-    });
-  }
-
-  async updateFAQ(id: string, data: any) {
-    return prisma.fAQ.update({
-      where: { id },
-      data,
-    });
-  }
-
-  async deleteFAQ(id: string) {
-    return prisma.fAQ.delete({
-      where: { id },
-    });
-  }
-
-  // ============= Statistics =============
-  async getTicketStats(schoolId?: string) {
-    const where: any = schoolId ? { schoolId } : {};
-
-    const [total, byStatus, byPriority, byCategory, avgResolutionTime] = await Promise.all([
-      prisma.supportTicket.count({ where }),
-      prisma.supportTicket.groupBy({
-        by: ['status'],
-        where,
-        _count: true,
-      }),
-      prisma.supportTicket.groupBy({
-        by: ['priority'],
-        where,
-        _count: true,
-      }),
-      prisma.supportTicket.groupBy({
-        by: ['category'],
-        where,
-        _count: true,
-      }),
-      prisma.supportTicket.aggregate({
-        where: {
-          ...where,
-          resolvedAt: { not: null },
-        },
-        _avg: {
-          rating: true,
-        },
-      }),
-    ]);
-
-    return {
-      total,
-      byStatus: byStatus.reduce((acc, item) => {
-        acc[item.status] = item._count;
-        return acc;
-      }, {} as Record<string, number>),
-      byPriority: byPriority.reduce((acc, item) => {
-        acc[item.priority] = item._count;
-        return acc;
-      }, {} as Record<string, number>),
-      byCategory: byCategory.reduce((acc, item) => {
-        acc[item.category] = item._count;
-        return acc;
-      }, {} as Record<string, number>),
-      avgRating: avgResolutionTime._avg.rating,
+      openTickets,
+      inProgressTickets,
+      closedTickets,
+      highPriorityTickets,
+      totalTickets: openTickets + inProgressTickets + closedTickets,
     };
   }
 }

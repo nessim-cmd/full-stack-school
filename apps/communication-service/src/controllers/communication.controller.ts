@@ -1,246 +1,238 @@
 import { Request, Response } from 'express';
 import { communicationService } from '../services/communication.service';
-import { HTTP_STATUS } from '@workspace/shared/constants';
 
 export class CommunicationController {
-  // ============= Notifications =============
-  async getNotifications(req: Request, res: Response): Promise<void> {
+  // Notifications
+  async getNotifications(req: Request, res: Response) {
     try {
-      const { userId, userRole } = req.params;
-      const { unreadOnly } = req.query;
+      const { userId, userRole } = req.query;
       const notifications = await communicationService.getNotifications(
+        userId as string,
+        userRole as string
+      );
+      res.json(notifications);
+    } catch (error) {
+      console.error('Error getting notifications:', error);
+      res.status(500).json({ error: 'Failed to get notifications' });
+    }
+  }
+
+  async createNotification(req: Request, res: Response) {
+    try {
+      const { title, message, type, userId, userRole, schoolId } = req.body;
+      const notification = await communicationService.createNotification({
+        title,
+        message,
+        type: type || 'general',
         userId,
         userRole,
-        unreadOnly === 'true'
-      );
-      res.status(HTTP_STATUS.OK).json({ success: true, data: notifications });
-    } catch (error) {
-      console.error('Get notifications error:', error);
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Failed to fetch notifications' });
-    }
-  }
-
-  async createNotification(req: Request, res: Response): Promise<void> {
-    try {
-      const notification = await communicationService.createNotification(req.body);
-      res.status(HTTP_STATUS.CREATED).json({ success: true, data: notification });
-    } catch (error) {
-      console.error('Create notification error:', error);
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Failed to create notification' });
-    }
-  }
-
-  async createBulkNotifications(req: Request, res: Response): Promise<void> {
-    try {
-      const { notifications } = req.body;
-      const result = await communicationService.createBulkNotifications(notifications);
-      res.status(HTTP_STATUS.CREATED).json({ success: true, data: result });
-    } catch (error) {
-      console.error('Create bulk notifications error:', error);
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Failed to create notifications' });
-    }
-  }
-
-  async markAsRead(req: Request, res: Response): Promise<void> {
-    try {
-      const { id } = req.params;
-      const notification = await communicationService.markAsRead(Number(id));
-      res.status(HTTP_STATUS.OK).json({ success: true, data: notification });
-    } catch (error) {
-      console.error('Mark as read error:', error);
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Failed to mark notification as read' });
-    }
-  }
-
-  async markAllAsRead(req: Request, res: Response): Promise<void> {
-    try {
-      const { userId, userRole } = req.params;
-      await communicationService.markAllAsRead(userId, userRole);
-      res.status(HTTP_STATUS.OK).json({ success: true, message: 'All notifications marked as read' });
-    } catch (error) {
-      console.error('Mark all as read error:', error);
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Failed to mark all as read' });
-    }
-  }
-
-  async getUnreadCount(req: Request, res: Response): Promise<void> {
-    try {
-      const { userId, userRole } = req.params;
-      const count = await communicationService.getUnreadCount(userId, userRole);
-      res.status(HTTP_STATUS.OK).json({ success: true, data: { count } });
-    } catch (error) {
-      console.error('Get unread count error:', error);
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Failed to get unread count' });
-    }
-  }
-
-  async deleteNotification(req: Request, res: Response): Promise<void> {
-    try {
-      const { id } = req.params;
-      await communicationService.deleteNotification(Number(id));
-      res.status(HTTP_STATUS.OK).json({ success: true, message: 'Notification deleted' });
-    } catch (error) {
-      console.error('Delete notification error:', error);
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Failed to delete notification' });
-    }
-  }
-
-  // ============= Messages =============
-  async getMessages(req: Request, res: Response): Promise<void> {
-    try {
-      const { userId, userRole } = req.params;
-      const { page, limit } = req.query;
-      const result = await communicationService.getMessages(
-        userId,
-        userRole,
-        Number(page) || 1,
-        Number(limit) || 20
-      );
-      res.status(HTTP_STATUS.OK).json({ success: true, ...result });
-    } catch (error) {
-      console.error('Get messages error:', error);
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Failed to fetch messages' });
-    }
-  }
-
-  async getConversation(req: Request, res: Response): Promise<void> {
-    try {
-      const { userId1, role1, userId2, role2 } = req.query;
-      const messages = await communicationService.getConversation(
-        userId1 as string,
-        role1 as string,
-        userId2 as string,
-        role2 as string
-      );
-      res.status(HTTP_STATUS.OK).json({ success: true, data: messages });
-    } catch (error) {
-      console.error('Get conversation error:', error);
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Failed to fetch conversation' });
-    }
-  }
-
-  async sendMessage(req: Request, res: Response): Promise<void> {
-    try {
-      const message = await communicationService.sendMessage(req.body);
-      res.status(HTTP_STATUS.CREATED).json({ success: true, data: message });
-    } catch (error) {
-      console.error('Send message error:', error);
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Failed to send message' });
-    }
-  }
-
-  async markMessageAsRead(req: Request, res: Response): Promise<void> {
-    try {
-      const { id } = req.params;
-      const message = await communicationService.markMessageAsRead(Number(id));
-      res.status(HTTP_STATUS.OK).json({ success: true, data: message });
-    } catch (error) {
-      console.error('Mark message as read error:', error);
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Failed to mark message as read' });
-    }
-  }
-
-  async deleteMessage(req: Request, res: Response): Promise<void> {
-    try {
-      const { id } = req.params;
-      await communicationService.deleteMessage(Number(id));
-      res.status(HTTP_STATUS.OK).json({ success: true, message: 'Message deleted' });
-    } catch (error) {
-      console.error('Delete message error:', error);
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Failed to delete message' });
-    }
-  }
-
-  // ============= Announcements =============
-  async getAnnouncements(req: Request, res: Response): Promise<void> {
-    try {
-      const { schoolId } = req.params;
-      const { userRole, classId } = req.query;
-      const announcements = await communicationService.getAnnouncements(
         schoolId,
-        userRole as string,
-        classId ? Number(classId) : undefined
+      });
+      res.status(201).json(notification);
+    } catch (error) {
+      console.error('Error creating notification:', error);
+      res.status(500).json({ error: 'Failed to create notification' });
+    }
+  }
+
+  async markNotificationAsRead(req: Request, res: Response) {
+    try {
+      const { id } = req.params;
+      const notification = await communicationService.markNotificationAsRead(parseInt(id));
+      res.json(notification);
+    } catch (error) {
+      console.error('Error marking notification as read:', error);
+      res.status(500).json({ error: 'Failed to mark notification as read' });
+    }
+  }
+
+  async deleteNotification(req: Request, res: Response) {
+    try {
+      const { id } = req.params;
+      await communicationService.deleteNotification(parseInt(id));
+      res.status(204).send();
+    } catch (error) {
+      console.error('Error deleting notification:', error);
+      res.status(500).json({ error: 'Failed to delete notification' });
+    }
+  }
+
+  async getUnreadCount(req: Request, res: Response) {
+    try {
+      const { userId, userRole } = req.query;
+      const count = await communicationService.getUnreadNotificationsCount(
+        userId as string,
+        userRole as string
       );
-      res.status(HTTP_STATUS.OK).json({ success: true, data: announcements });
+      res.json({ count });
     } catch (error) {
-      console.error('Get announcements error:', error);
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Failed to fetch announcements' });
+      console.error('Error getting unread count:', error);
+      res.status(500).json({ error: 'Failed to get unread count' });
     }
   }
 
-  async createAnnouncement(req: Request, res: Response): Promise<void> {
+  // Messages
+  async getMessages(req: Request, res: Response) {
     try {
-      const announcement = await communicationService.createAnnouncement(req.body);
-      res.status(HTTP_STATUS.CREATED).json({ success: true, data: announcement });
+      const { userId, userRole } = req.query;
+      const messages = await communicationService.getMessages(
+        userId as string,
+        userRole as string
+      );
+      res.json(messages);
     } catch (error) {
-      console.error('Create announcement error:', error);
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Failed to create announcement' });
+      console.error('Error getting messages:', error);
+      res.status(500).json({ error: 'Failed to get messages' });
     }
   }
 
-  async updateAnnouncement(req: Request, res: Response): Promise<void> {
+  async sendMessage(req: Request, res: Response) {
     try {
-      const { id } = req.params;
-      const announcement = await communicationService.updateAnnouncement(Number(id), req.body);
-      res.status(HTTP_STATUS.OK).json({ success: true, data: announcement });
+      const { subject, content, senderId, senderName, senderRole, schoolId, recipients } = req.body;
+      const message = await communicationService.sendMessage({
+        subject,
+        content,
+        senderId,
+        senderName,
+        senderRole,
+        schoolId,
+        recipients,
+      });
+      res.status(201).json(message);
     } catch (error) {
-      console.error('Update announcement error:', error);
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Failed to update announcement' });
+      console.error('Error sending message:', error);
+      res.status(500).json({ error: 'Failed to send message' });
     }
   }
 
-  async deleteAnnouncement(req: Request, res: Response): Promise<void> {
-    try {
-      const { id } = req.params;
-      await communicationService.deleteAnnouncement(Number(id));
-      res.status(HTTP_STATUS.OK).json({ success: true, message: 'Announcement deleted' });
-    } catch (error) {
-      console.error('Delete announcement error:', error);
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Failed to delete announcement' });
-    }
-  }
-
-  // ============= Email Templates =============
-  async getEmailTemplates(req: Request, res: Response): Promise<void> {
-    try {
-      const { schoolId } = req.params;
-      const templates = await communicationService.getEmailTemplates(schoolId);
-      res.status(HTTP_STATUS.OK).json({ success: true, data: templates });
-    } catch (error) {
-      console.error('Get email templates error:', error);
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Failed to fetch email templates' });
-    }
-  }
-
-  async createEmailTemplate(req: Request, res: Response): Promise<void> {
-    try {
-      const template = await communicationService.createEmailTemplate(req.body);
-      res.status(HTTP_STATUS.CREATED).json({ success: true, data: template });
-    } catch (error) {
-      console.error('Create email template error:', error);
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Failed to create email template' });
-    }
-  }
-
-  async updateEmailTemplate(req: Request, res: Response): Promise<void> {
+  async getMessageById(req: Request, res: Response) {
     try {
       const { id } = req.params;
-      const template = await communicationService.updateEmailTemplate(Number(id), req.body);
-      res.status(HTTP_STATUS.OK).json({ success: true, data: template });
+      const message = await communicationService.getMessageById(parseInt(id));
+      if (!message) {
+        return res.status(404).json({ error: 'Message not found' });
+      }
+      res.json(message);
     } catch (error) {
-      console.error('Update email template error:', error);
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Failed to update email template' });
+      console.error('Error getting message:', error);
+      res.status(500).json({ error: 'Failed to get message' });
     }
   }
 
-  async deleteEmailTemplate(req: Request, res: Response): Promise<void> {
+  async markMessageAsRead(req: Request, res: Response) {
     try {
       const { id } = req.params;
-      await communicationService.deleteEmailTemplate(Number(id));
-      res.status(HTTP_STATUS.OK).json({ success: true, message: 'Email template deleted' });
+      const { recipientId } = req.body;
+      await communicationService.markMessageAsRead(parseInt(id), recipientId);
+      res.json({ success: true });
     } catch (error) {
-      console.error('Delete email template error:', error);
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Failed to delete email template' });
+      console.error('Error marking message as read:', error);
+      res.status(500).json({ error: 'Failed to mark message as read' });
+    }
+  }
+
+  async deleteMessage(req: Request, res: Response) {
+    try {
+      const { id } = req.params;
+      await communicationService.deleteMessage(parseInt(id));
+      res.status(204).send();
+    } catch (error) {
+      console.error('Error deleting message:', error);
+      res.status(500).json({ error: 'Failed to delete message' });
+    }
+  }
+
+  // Announcements
+  async getAnnouncements(req: Request, res: Response) {
+    try {
+      const { schoolId } = req.query;
+      const announcements = await communicationService.getAnnouncements(schoolId as string);
+      res.json(announcements);
+    } catch (error) {
+      console.error('Error getting announcements:', error);
+      res.status(500).json({ error: 'Failed to get announcements' });
+    }
+  }
+
+  async createAnnouncement(req: Request, res: Response) {
+    try {
+      const { title, description, date, classId, schoolId } = req.body;
+      const announcement = await communicationService.createAnnouncement({
+        title,
+        description,
+        date: new Date(date),
+        classId: classId ? parseInt(classId) : undefined,
+        schoolId,
+      });
+      res.status(201).json(announcement);
+    } catch (error) {
+      console.error('Error creating announcement:', error);
+      res.status(500).json({ error: 'Failed to create announcement' });
+    }
+  }
+
+  async updateAnnouncement(req: Request, res: Response) {
+    try {
+      const { id } = req.params;
+      const { title, description, date, classId } = req.body;
+      const announcement = await communicationService.updateAnnouncement(parseInt(id), {
+        title,
+        description,
+        date: date ? new Date(date) : undefined,
+        classId: classId ? parseInt(classId) : undefined,
+      });
+      res.json(announcement);
+    } catch (error) {
+      console.error('Error updating announcement:', error);
+      res.status(500).json({ error: 'Failed to update announcement' });
+    }
+  }
+
+  async deleteAnnouncement(req: Request, res: Response) {
+    try {
+      const { id } = req.params;
+      await communicationService.deleteAnnouncement(parseInt(id));
+      res.status(204).send();
+    } catch (error) {
+      console.error('Error deleting announcement:', error);
+      res.status(500).json({ error: 'Failed to delete announcement' });
+    }
+  }
+
+  // Global Announcements
+  async getGlobalAnnouncements(req: Request, res: Response) {
+    try {
+      const announcements = await communicationService.getGlobalAnnouncements();
+      res.json(announcements);
+    } catch (error) {
+      console.error('Error getting global announcements:', error);
+      res.status(500).json({ error: 'Failed to get global announcements' });
+    }
+  }
+
+  async createGlobalAnnouncement(req: Request, res: Response) {
+    try {
+      const { title, message, type } = req.body;
+      const announcement = await communicationService.createGlobalAnnouncement({
+        title,
+        message,
+        type,
+      });
+      res.status(201).json(announcement);
+    } catch (error) {
+      console.error('Error creating global announcement:', error);
+      res.status(500).json({ error: 'Failed to create global announcement' });
+    }
+  }
+
+  async deleteGlobalAnnouncement(req: Request, res: Response) {
+    try {
+      const { id } = req.params;
+      await communicationService.deleteGlobalAnnouncement(id);
+      res.status(204).send();
+    } catch (error) {
+      console.error('Error deleting global announcement:', error);
+      res.status(500).json({ error: 'Failed to delete global announcement' });
     }
   }
 }
